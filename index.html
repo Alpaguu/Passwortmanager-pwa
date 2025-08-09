@@ -392,6 +392,19 @@
             transform: rotate(180deg);
         }
 
+        /* Chevron arrow (nicer fold icon) */
+        .chevron {
+            width: 10px;
+            height: 10px;
+            border-right: 2px solid #6b7280;
+            border-bottom: 2px solid #6b7280;
+            transform: rotate(45deg);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+            display: inline-block;
+            margin-left: 8px;
+        }
+        .password-item.expanded .chevron { transform: rotate(-135deg); border-color: #374151; }
+
         /* Compact row (no expand) */
         .password-row {
             padding: 12px 14px;
@@ -514,6 +527,40 @@
             text-overflow: ellipsis;
         }
 
+        /* Footer row to hold edit/delete at bottom */
+        .row-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 8px 14px 14px 14px;
+        }
+        .row-footer .pill-btn { padding: 10px 14px; font-size: 13px; }
+
+        /* Folder chips selector inside card */
+        .folder-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: #f3f4f6;
+            padding: 10px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+        .folder-chip {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .folder-chip:hover { background: #f9fafb; }
+        .folder-chip.selected {
+            background: #111827;
+            color: #ffffff;
+            border-color: #111827;
+        }
+
         .password-content {
             max-height: 0;
             overflow: hidden;
@@ -530,19 +577,9 @@
             padding: 18px 20px;
         }
 
-        /* Compact, two-column details layout on wider screens */
+        /* Stacked fields on all sizes (Ordner → Benutzername → Passwort → URL → Notizen) */
         @media (min-width: 900px) {
-            .password-details {
-                display: grid;
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-                gap: 12px;
-            }
-            .password-details .card-actions {
-                grid-column: 1 / -1;
-            }
-            .password-details .password-field.full {
-                grid-column: 1 / -1;
-            }
+            .password-details { display: block; }
         }
 
         .password-field {
@@ -2121,35 +2158,60 @@
             }
 
             renderPasswordRow(password) {
-                const folderName = (this.folders.find(f => f.id === password.folderId) || {}).name || 'Ohne Ordner';
                 const title = this.escapeHtml(password.title);
                 const username = this.escapeHtml(password.username);
                 const url = this.escapeHtml(password.url || '');
                 return `
                     <div class="password-item" data-password-id="${password.id}">
-                        <div class="password-row">
-                            <div class="row-main" title="${title}">
-                                <div class="row-title">${title}</div>
-                                <div class="row-meta">
-                                    <div class="chip" title="Klicken zum Kopieren">
-                                        <span>User:</span>
-                                        <span class="chip-text">${username}</span>
-                                        <button class="icon-btn compact" title="Kopieren" onclick="copyToClipboard('${username}')">📋</button>
+                        <div class="password-header" role="button" tabindex="0" title="Details anzeigen">
+                            <h3>${title}</h3>
+                            <span class="chevron" aria-hidden="true"></span>
+                        </div>
+                        <div class="password-content">
+                            <div class="password-details">
+                                <div class="password-field">
+                                    <label>Benutzername:</label>
+                                    <div class="value">
+                                        <input type="text" value="${username}" readonly>
+                                        <button class="copy-btn" onclick="copyToClipboard('${username}')">Kopieren</button>
                                     </div>
-                                    <div class="chip" title="Klicken zum Kopieren">
-                                        <span>PW:</span>
-                                        <input type="password" value="${this.escapeHtml(password.password)}" readonly id="pwd-${password.id}-inline">
-                                        <button class="icon-btn compact" title="Kopieren" onclick="copyToClipboard('${this.escapeHtml(password.password)}')">📋</button>
-                                        <button class="icon-btn" onclick="(() => { const i = document.getElementById('pwd-${password.id}-inline'); i.type = i.type === 'password' ? 'text' : 'password'; })()">👁️</button>
+                                </div>
+                                <div class="password-field">
+                                    <label>Passwort:</label>
+                                    <div class="value">
+                                        <input type="password" value="${this.escapeHtml(password.password)}" readonly id="pwd-${password.id}">
+                                        <button class="copy-btn" onclick="copyToClipboard('${this.escapeHtml(password.password)}')">Kopieren</button>
+                                        <button class="copy-btn" onclick="togglePasswordVisibility('${password.id}')">👁️</button>
                                     </div>
-                                    ${url ? `<div class=\"chip\"><span>URL:</span> <a href=\"${this.escapeHtml(this.normalizeUrl(password.url))}\" target=\"_blank\" rel=\"noopener\">${this.escapeHtml(password.url)}</a> <button class=\"icon-btn compact\" title=\"Kopieren\" onclick=\"copyToClipboard('${this.escapeHtml(password.url)}')\">📋</button></div>` : ''}
-                                    ${password.notes ? `<div class=\"chip chip-note\" title=\"${this.escapeHtml(password.notes)}\">${this.escapeHtml(password.notes)}</div>` : ''}
+                                </div>
+                                ${password.url ? `
+                                    <div class="password-field">
+                                        <label>URL:</label>
+                                        <div class="value">
+                                            <input type="text" value="${this.escapeHtml(password.url)}" readonly>
+                                            <button class="copy-btn" onclick="copyToClipboard('${this.escapeHtml(password.url)}')">Kopieren</button>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                ${password.notes ? `
+                                    <div class="password-field full">
+                                        <label>Notizen:</label>
+                                        <div class="value">
+                                            <textarea readonly style="width: 100%; border: none; background: transparent; resize: none; font-family: inherit;">${this.escapeHtml(password.notes)}</textarea>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                <div class="password-field">
+                                    <label>Ordner:</label>
+                                    <div class="folder-chips">
+                                        <span class="folder-chip ${!password.folderId ? 'selected' : ''}" onclick="passwordManager.movePassword('${password.id}', null)">Ohne Ordner</span>
+                                        ${this.folders.map(f => `<span class=\"folder-chip ${password.folderId === f.id ? 'selected' : ''}\" onclick=\"passwordManager.movePassword('${password.id}', '${f.id}')\">${this.escapeHtml(f.name)}</span>`).join('')}
+                                    </div>
                                 </div>
                             </div>
-                            <div class="quick-actions">
-                                
-                                <button class="pill-btn edit" onclick="editPassword('${password.id}')" title="Bearbeiten" aria-label="Bearbeiten">✏️</button>
-                                <button class="pill-btn danger" onclick="deletePassword('${password.id}')" title="Löschen" aria-label="Löschen">🗑️</button>
+                            <div class="row-footer">
+                                <button class="btn" onclick="editPassword('${password.id}')">Bearbeiten</button>
+                                <button class="btn btn-danger" onclick="deletePassword('${password.id}')">Löschen</button>
                             </div>
                         </div>
                     </div>
