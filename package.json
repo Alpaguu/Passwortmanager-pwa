@@ -1,6 +1,6 @@
 {
   "name": "password-manager-backend",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Lokaler Passwort-Manager (Backend + Desktop-App)",
   "author": "",
   "license": "MIT",
@@ -28,7 +28,7 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "electron": "^37.2.6",
+    "electron": "37.2.6",
     "electron-builder": "^26.0.12",
     "nodemon": "^3.0.1",
     "concurrently": "^8.2.2"
@@ -44,13 +44,7 @@
       "**/*",
       "!dist/**"
     ],
-    "extraResources": [
-      {
-        "from": "data/",
-        "to": "data",
-        "filter": ["**/*"]
-      }
-    ],
+    "extraResources": [],
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity",

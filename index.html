@@ -928,8 +928,12 @@
             <h2 id="confirmTitle">Bestätigen</h2>
             <p id="confirmMessage" style="margin-bottom:16px; color:#374151;"></p>
             <div id="confirmPasswordGroup" class="form-group" style="display:none;">
-                <label for="confirmPasswordInput">Zur Bestätigung Master-Passwort eingeben:</label>
+                <label for="confirmPasswordInput" id="confirmPasswordLabel">Zur Bestätigung Master-Passwort eingeben:</label>
                 <input type="password" id="confirmPasswordInput" placeholder="Master-Passwort">
+            </div>
+            <div id="confirmPassword2Group" class="form-group" style="display:none;">
+                <label for="confirmPassword2Input" id="confirmPassword2Label">Passwort wiederholen:</label>
+                <input type="password" id="confirmPassword2Input" placeholder="Passwort wiederholen">
             </div>
             <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
                 <button id="confirmCancelBtn" class="btn btn-secondary" style="width:auto;">Abbrechen</button>
@@ -1998,13 +2002,9 @@
                     const vault = await LocalMode.loadVault(this.dataKeyHex);
                     const exportData = { version: '1.0', exportDate: new Date().toISOString(), passwords: vault.passwords || [] };
 
-                    // Ask for export password (twice)
-                    const pass1 = window.prompt('Export-Passwort festlegen (mind. 8 Zeichen):');
-                    if (pass1 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
-                    if (!pass1 || pass1.length < 8) { this.showNotification('Bitte ein Export-Passwort mit mindestens 8 Zeichen eingeben.', 'error'); return; }
-                    const pass2 = window.prompt('Export-Passwort wiederholen:');
-                    if (pass2 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
-                    if (pass1 !== pass2) { this.showNotification('Passwörter stimmen nicht überein.', 'error'); return; }
+                    // Ask for export password (twice) using modal
+                    const pass1 = await promptNewPasswordWithConfirm(8);
+                    if (!pass1) { this.showNotification('Export abgebrochen.', 'error'); return; }
 
                     // Derive key and encrypt
                     const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -2036,13 +2036,9 @@
 
                     const data = await response.json();
 
-                    // Offer encryption for remote export as well
-                    const pass1 = window.prompt('Export-Passwort festlegen (mind. 8 Zeichen):');
-                    if (pass1 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
-                    if (!pass1 || pass1.length < 8) { this.showNotification('Bitte ein Export-Passwort mit mindestens 8 Zeichen eingeben.', 'error'); return; }
-                    const pass2 = window.prompt('Export-Passwort wiederholen:');
-                    if (pass2 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
-                    if (pass1 !== pass2) { this.showNotification('Passwörter stimmen nicht überein.', 'error'); return; }
+                    // Offer encryption for remote export as well (modal)
+                    const pass1 = await promptNewPasswordWithConfirm(8);
+                    if (!pass1) { this.showNotification('Export abgebrochen.', 'error'); return; }
 
                     const salt = crypto.getRandomValues(new Uint8Array(16));
                     const key = await deriveAesKeyFromString(pass1, salt);
@@ -2073,8 +2069,8 @@
                         let data = JSON.parse(text);
                         // Encrypted export payload support
                         if (data && data.encrypted && data.iv && data.salt) {
-                            const pass = window.prompt('Passwort für den Import eingeben:');
-                            if (pass === null) throw new Error('Import abgebrochen');
+                            const pass = await promptPassword('Passwort erforderlich', 'Passwort für den Import eingeben:');
+                            if (!pass) throw new Error('Import abgebrochen');
                             const key = await deriveAesKeyFromString(pass, new Uint8Array(fromHex(data.salt)));
                             const json = await decryptStringAesCbc(data.encrypted, data.iv, key);
                             data = JSON.parse(json || '{}');
@@ -2099,8 +2095,8 @@
                     const text = await file.text();
                     let data = JSON.parse(text);
                     if (data && data.encrypted && data.iv && data.salt) {
-                        const pass = window.prompt('Passwort für den Import eingeben:');
-                        if (pass === null) throw new Error('Import abgebrochen');
+                        const pass = await promptPassword('Passwort erforderlich', 'Passwort für den Import eingeben:');
+                        if (!pass) throw new Error('Import abgebrochen');
                         const key = await deriveAesKeyFromString(pass, new Uint8Array(fromHex(data.salt)));
                         const json = await decryptStringAesCbc(data.encrypted, data.iv, key);
                         data = JSON.parse(json || '{}');
@@ -2322,18 +2318,18 @@
                     }
                     
                     console.log('Verifying master password...');
-                    try {
-                        await passwordManager.verifyMasterPassword(masterPassword);
-                    } catch (e) {
-                        const needsLink = (e.details && e.details.code === 'LINK_REQUIRED') || /Linking required/i.test(e.message || '');
-                        if (needsLink) {
-                            const confirming = prompt('Dieses Master-Passwort ist neu und muss mit einem bestehenden Master-Passwort verknüpft werden. Bitte bestehendes Master-Passwort eingeben:');
-                            if (!confirming) throw e;
-                            await passwordManager.verifyMasterPassword(masterPassword, confirming);
-                        } else {
-                            throw e;
+                        try {
+                            await passwordManager.verifyMasterPassword(masterPassword);
+                        } catch (e) {
+                            const needsLink = (e.details && e.details.code === 'LINK_REQUIRED') || /Linking required/i.test(e.message || '');
+                            if (needsLink) {
+                                const confirming = await promptPassword('Verknüpfung erforderlich', 'Dieses Master-Passwort ist neu und muss mit einem bestehenden Master-Passwort verknüpft werden. Bitte bestehendes Master-Passwort eingeben:');
+                                if (!confirming) throw e;
+                                await passwordManager.verifyMasterPassword(masterPassword, confirming);
+                            } else {
+                                throw e;
+                            }
                         }
-                    }
                     console.log('Master password verified successfully');
                 } else {
                     // First time setup, add master password
@@ -2525,20 +2521,28 @@
             }
         }
 
-        async function openConfirmDialog({ title, message, requirePassword = false }) {
+        async function openConfirmDialog({ title, message, requirePassword = false, requirePasswordConfirm = false, passwordLabel = 'Passwort', passwordConfirmLabel = 'Passwort wiederholen' }) {
             return new Promise((resolve) => {
                 const modal = document.getElementById('confirmModal');
                 const titleEl = document.getElementById('confirmTitle');
                 const msgEl = document.getElementById('confirmMessage');
                 const group = document.getElementById('confirmPasswordGroup');
+                const group2 = document.getElementById('confirmPassword2Group');
                 const input = document.getElementById('confirmPasswordInput');
+                const input2 = document.getElementById('confirmPassword2Input');
+                const label1 = document.getElementById('confirmPasswordLabel');
+                const label2 = document.getElementById('confirmPassword2Label');
                 const cancelBtn = document.getElementById('confirmCancelBtn');
                 const okBtn = document.getElementById('confirmOkBtn');
 
                 titleEl.textContent = title || 'Bestätigen';
                 msgEl.textContent = message || '';
                 group.style.display = requirePassword ? 'block' : 'none';
+                group2.style.display = requirePasswordConfirm ? 'block' : 'none';
+                if (label1) label1.textContent = passwordLabel;
+                if (label2) label2.textContent = passwordConfirmLabel;
                 input.value = '';
+                if (input2) input2.value = '';
                 modal.style.display = 'block';
 
                 const cleanup = () => {
@@ -2551,10 +2555,44 @@
                 okBtn.onclick = () => {
                     const val = requirePassword ? input.value : true;
                     if (requirePassword && !val) return;
+                    if (requirePasswordConfirm) {
+                        const confirmVal = input2.value;
+                        if (!confirmVal) return;
+                        if (val !== confirmVal) {
+                            showToast('Passwörter stimmen nicht überein.', 'error');
+                            return;
+                        }
+                        cleanup();
+                        resolve(val);
+                        return;
+                    }
                     cleanup();
                     resolve(val);
                 };
             });
+        }
+
+        async function promptPassword(title, message) {
+            return await openConfirmDialog({ title, message, requirePassword: true });
+        }
+
+        async function promptNewPasswordWithConfirm(minLength = 8) {
+            while (true) {
+                const pw = await openConfirmDialog({
+                    title: 'Passwort festlegen',
+                    message: `Bitte ein Passwort mit mindestens ${minLength} Zeichen eingeben:`,
+                    requirePassword: true,
+                    requirePasswordConfirm: true,
+                    passwordLabel: 'Passwort',
+                    passwordConfirmLabel: 'Passwort wiederholen'
+                });
+                if (!pw) return null;
+                if (pw.length < minLength) {
+                    showToast(`Bitte mindestens ${minLength} Zeichen.`, 'error');
+                    continue;
+                }
+                return pw;
+            }
         }
 
         async function removeMasterPassword(id) {
