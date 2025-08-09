@@ -30,7 +30,9 @@ self.addEventListener('fetch', (event) => {
   // iOS in standalone PWA may not set mode:navigate; also catch document requests
   if (request.mode === 'navigate' || (request.headers.get('accept') || '').includes('text/html')) {
     event.respondWith(
-      fetch(request).catch(() => caches.match('./index.html'))
+      fetch(request)
+        .then((res) => (res && res.ok ? res : caches.match('./index.html')))
+        .catch(() => caches.match('./index.html'))
     );
     return;
   }

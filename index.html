@@ -958,7 +958,7 @@
         // Register Service Worker for PWA (best-effort)
         if ('serviceWorker' in navigator) {
             try {
-                navigator.serviceWorker.register('service-worker.js', { scope: './' }).catch(() => {});
+                navigator.serviceWorker.register('service-worker.js', { scope: '/passwortmanager-pwa/' }).catch(() => {});
             } catch (e) {
                 // no-op
             }
