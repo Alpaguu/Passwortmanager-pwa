@@ -8,6 +8,7 @@ const https = require('https');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 require('dotenv').config();
 
 const app = express();
@@ -20,13 +21,26 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
-app.use(express.static('public')); // Serve static files
+app.use(express.static('public')); // Serve static files from /public at root (/icon-192.png)
+app.use('/public', express.static(path.join(__dirname, 'public'))); // Also serve with /public prefix for manifest paths
+// Also serve root-level assets like manifest and service worker
+app.get('/manifest.webmanifest', (req, res) => {
+    res.sendFile(path.join(__dirname, 'manifest.webmanifest'));
+});
+app.get('/service-worker.js', (req, res) => {
+    res.sendFile(path.join(__dirname, 'service-worker.js'));
+});
 
 // Session configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
     resave: false,
     saveUninitialized: false,
+    rolling: true, // refresh expiration on each request
+    store: new FileStore({
+        retries: 0,
+        path: path.join(__dirname, 'data', 'sessions')
+    }),
     cookie: {
         // In Electron desktop (http://localhost) we must NOT require secure cookies
         secure: process.env.ELECTRON === 'true' ? false : process.env.NODE_ENV === 'production',
@@ -395,6 +409,7 @@ class FileManager {
 const requireMasterPassword = (req, res, next) => {
     const currentMasterPassword = getMasterPassword(req);
     if (!currentMasterPassword || !req.session.authenticated) {
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         return res.status(401).json({ 
             error: 'Not authenticated. Please login with your master password.' 
         });
@@ -594,9 +609,14 @@ app.post('/api/verify-master-password', async (req, res) => {
             }
         }
 
-        // Set current session
+        // Set current session to DataKey
         setMasterPassword(req, dataKey);
+        // Explicitly save the session before responding to avoid race conditions on immediate next request
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => err ? reject(err) : resolve());
+        });
 
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.json({ 
             message: 'Login successful',
             masterPassword: {
@@ -887,6 +907,51 @@ app.post('/api/folders', requireMasterPassword, async (req, res) => {
     }
 });
 
+// Reorder folders (placed before param routes to avoid :id catching 'reorder')
+app.put('/api/folders/reorder', requireMasterPassword, async (req, res) => {
+    try {
+        // Be lenient with payload shape: accept array body, {order}, {ids}, or comma-separated string
+        let incoming = req.body;
+        let order = Array.isArray(incoming)
+            ? incoming
+            : (incoming && (incoming.order ?? incoming.ids ?? incoming.folderIds));
+
+        if (typeof order === 'string') {
+            try {
+                // Try JSON first, fallback to comma-separated list
+                const parsed = JSON.parse(order);
+                order = Array.isArray(parsed) ? parsed : String(order).split(',');
+            } catch (_) {
+                order = String(order).split(',');
+            }
+        }
+
+        if (!Array.isArray(order)) {
+            return res.status(400).json({ error: 'Invalid order payload' });
+        }
+
+        // Normalize to strings and unique while preserving first occurrence
+        const normalized = [];
+        const seen = new Set();
+        for (const id of order) {
+            const sid = String(id || '').trim();
+            if (!sid || seen.has(sid)) continue;
+            seen.add(sid);
+            normalized.push(sid);
+        }
+
+        const folders = await FileManager.readFolders();
+        const byId = new Map(folders.map(f => [f.id, f]));
+        const ordered = normalized.map(id => byId.get(id)).filter(Boolean);
+        const rest = folders.filter(f => !normalized.includes(f.id));
+        const finalList = [...ordered, ...rest];
+        await FileManager.writeFolders(finalList);
+        res.json(finalList);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Update folder (rename)
 app.put('/api/folders/:id', requireMasterPassword, async (req, res) => {
     try {
@@ -934,6 +999,8 @@ app.delete('/api/folders/:id', requireMasterPassword, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// (duplicate reorder route removed; the canonical route is declared above before param routes)
 
 // Move password to folder
 app.put('/api/passwords/:id/move', requireMasterPassword, async (req, res) => {
