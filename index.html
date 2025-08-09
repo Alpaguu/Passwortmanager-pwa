@@ -1997,16 +1997,31 @@
                 if (this.localMode) {
                     const vault = await LocalMode.loadVault(this.dataKeyHex);
                     const exportData = { version: '1.0', exportDate: new Date().toISOString(), passwords: vault.passwords || [] };
-                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+
+                    // Ask for export password (twice)
+                    const pass1 = window.prompt('Export-Passwort festlegen (mind. 8 Zeichen):');
+                    if (pass1 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
+                    if (!pass1 || pass1.length < 8) { this.showNotification('Bitte ein Export-Passwort mit mindestens 8 Zeichen eingeben.', 'error'); return; }
+                    const pass2 = window.prompt('Export-Passwort wiederholen:');
+                    if (pass2 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
+                    if (pass1 !== pass2) { this.showNotification('Passwörter stimmen nicht überein.', 'error'); return; }
+
+                    // Derive key and encrypt
+                    const salt = crypto.getRandomValues(new Uint8Array(16));
+                    const key = await deriveAesKeyFromString(pass1, salt);
+                    const { encrypted, iv } = await encryptStringAesCbc(JSON.stringify(exportData), key);
+                    const payload = { version: '1.1', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
+
+                    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `passwords_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    a.download = `passwords_backup_encrypted_${new Date().toISOString().split('T')[0]}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
-                    this.showNotification('Daten erfolgreich exportiert!', 'success');
+                    this.showNotification('Verschlüsselter Export erstellt.', 'success');
                     return;
                 }
                 try {
@@ -2020,18 +2035,31 @@
                     }
 
                     const data = await response.json();
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+                    // Offer encryption for remote export as well
+                    const pass1 = window.prompt('Export-Passwort festlegen (mind. 8 Zeichen):');
+                    if (pass1 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
+                    if (!pass1 || pass1.length < 8) { this.showNotification('Bitte ein Export-Passwort mit mindestens 8 Zeichen eingeben.', 'error'); return; }
+                    const pass2 = window.prompt('Export-Passwort wiederholen:');
+                    if (pass2 === null) { this.showNotification('Export abgebrochen.', 'error'); return; }
+                    if (pass1 !== pass2) { this.showNotification('Passwörter stimmen nicht überein.', 'error'); return; }
+
+                    const salt = crypto.getRandomValues(new Uint8Array(16));
+                    const key = await deriveAesKeyFromString(pass1, salt);
+                    const { encrypted, iv } = await encryptStringAesCbc(JSON.stringify(data), key);
+                    const payload = { version: '1.1', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
+
+                    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
-                    
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `passwords_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    a.download = `passwords_backup_encrypted_${new Date().toISOString().split('T')[0]}.json`;
                     document.body.appendChild(a);
                     a.click();
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                     
-                    this.showNotification('Daten erfolgreich exportiert!', 'success');
+                    this.showNotification('Verschlüsselter Export erstellt.', 'success');
                 } catch (error) {
                     this.showNotification('Fehler beim Exportieren: ' + error.message, 'error');
                 }
@@ -2042,7 +2070,15 @@
                 if (this.localMode) {
                     try {
                         const text = await file.text();
-                        const data = JSON.parse(text);
+                        let data = JSON.parse(text);
+                        // Encrypted export payload support
+                        if (data && data.encrypted && data.iv && data.salt) {
+                            const pass = window.prompt('Passwort für den Import eingeben:');
+                            if (pass === null) throw new Error('Import abgebrochen');
+                            const key = await deriveAesKeyFromString(pass, new Uint8Array(fromHex(data.salt)));
+                            const json = await decryptStringAesCbc(data.encrypted, data.iv, key);
+                            data = JSON.parse(json || '{}');
+                        }
                         if (!data.passwords || !Array.isArray(data.passwords)) throw new Error('Ungültiges Dateiformat');
                         const vault = await LocalMode.loadVault(this.dataKeyHex);
                         vault.passwords = data.passwords.map(p => ({
@@ -2061,7 +2097,14 @@
                 }
                 try {
                     const text = await file.text();
-                    const data = JSON.parse(text);
+                    let data = JSON.parse(text);
+                    if (data && data.encrypted && data.iv && data.salt) {
+                        const pass = window.prompt('Passwort für den Import eingeben:');
+                        if (pass === null) throw new Error('Import abgebrochen');
+                        const key = await deriveAesKeyFromString(pass, new Uint8Array(fromHex(data.salt)));
+                        const json = await decryptStringAesCbc(data.encrypted, data.iv, key);
+                        data = JSON.parse(json || '{}');
+                    }
                     
                     if (!data.passwords || !Array.isArray(data.passwords)) {
                         throw new Error('Ungültiges Dateiformat');
