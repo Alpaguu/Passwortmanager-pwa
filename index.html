@@ -6,8 +6,7 @@
     <title>Sicherer Passwort-Manager</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <link rel="manifest" href="public/manifest.webmanifest">
-    <link rel="apple-touch-icon" href="public/icon-192.png">
+    <link rel="manifest" href="manifest.webmanifest">
     <style>
         * {
             margin: 0;
@@ -959,7 +958,7 @@
         // Register Service Worker for PWA (best-effort)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+                navigator.serviceWorker.register('service-worker.js').catch(() => {});
             });
         }
         let uiEventsBound = false;

@@ -2,7 +2,7 @@ const CACHE_NAME = 'passwortmanager-cache-v3';
 const APP_SHELL = [
   './',
   './index.html',
-  './public/manifest.webmanifest',
+  './manifest.webmanifest',
 ];
 
 self.addEventListener('install', (event) => {
