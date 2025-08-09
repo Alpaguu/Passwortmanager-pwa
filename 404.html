@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weiterleitung…</title>
+  <meta http-equiv="refresh" content="0; url=/passwortmanager-pwa/" />
+  <script>
+    (function() {
+      var target = '/passwortmanager-pwa/';
+      // Preserve query and hash
+      var url = target + (location.search || '') + (location.hash || '');
+      location.replace(url);
+    })();
+  </script>
+  <noscript>
+    <a href="/passwortmanager-pwa/">Hier klicken, falls keine automatische Weiterleitung erfolgt.</a>
+  </noscript>
+</head>
+<body></body>
+</html>
+
+
