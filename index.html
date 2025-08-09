@@ -1,0 +1,2635 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sicherer Passwort-Manager</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="public/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="public/icon-192.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', 'Inter', sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            color: #1a1a1a;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: #ffffff;
+            color: #1a1a1a;
+            padding: 60px 24px 40px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.2rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.025em;
+        }
+
+        .header p {
+            color: #6b7280;
+            font-size: 1rem;
+            font-weight: 400;
+        }
+
+        .login-screen {
+            padding: 0 24px 60px;
+            text-align: center;
+            background: #ffffff;
+        }
+
+        .login-form {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 0.875rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.15s ease;
+            background: #ffffff;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Modal select styling (folder dropdown) same as entry select */
+        .form-group select {
+            width: 100%;
+            padding: 12px 40px 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 16px;
+            background: #ffffff;
+            transition: all 0.15s ease;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+        }
+
+        .form-group select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn {
+            background: #1a1a1a;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: #000000;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-secondary {
+            background: #f9fafb;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+
+        .btn-secondary:hover {
+            background: #f3f4f6;
+            border-color: #9ca3af;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-success {
+            background: #10b981;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .main-content {
+            display: none;
+            padding: 0 24px 60px;
+            background: #ffffff;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+            gap: 16px;
+            padding: 24px 0;
+            border-bottom: 1px solid #f3f4f6;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 12px 40px 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            background: #ffffff;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #9ca3af;
+            font-size: 16px;
+        }
+
+        .sort-box {
+            min-width: 180px;
+        }
+
+        .sort-box select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            background: #ffffff;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* Toolbar buttons side-by-side */
+        .toolbar .btn-group .btn {
+            width: auto;
+            padding: 12px 20px;
+        }
+
+        .folder-box {
+            min-width: 220px;
+        }
+
+        .folder-box select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            background: #ffffff;
+        }
+
+        .header-actions {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+        }
+
+        .header-actions .btn {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: transparent;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+        }
+
+        .header-actions .btn:hover {
+            background: #f9fafb;
+            color: #374151;
+        }
+
+        .passwords-list {
+            margin-bottom: 40px;
+        }
+
+        .password-item {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: all 0.15s ease;
+            overflow: hidden;
+        }
+
+        .password-item:hover {
+            border-color: #d1d5db;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+
+        .password-header {
+            padding: 14px 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #ffffff;
+            transition: background-color 0.15s ease;
+        }
+
+        .password-header:hover {
+            background: #f9fafb;
+        }
+
+        .password-header h3 {
+            color: #111827;
+            font-size: 1rem;
+            font-weight: 600;
+            margin: 0;
+            flex: 1;
+        }
+
+        .password-header .expand-icon {
+            color: #6b7280;
+            font-size: 18px;
+            transition: transform 0.2s ease;
+        }
+
+        .password-item.expanded .expand-icon {
+            transform: rotate(180deg);
+        }
+
+        .password-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background: #f9fafb;
+            border-top: 1px solid #e5e7eb;
+        }
+
+        .password-item.expanded .password-content {
+            max-height: 1000px;
+        }
+
+        .password-details {
+            padding: 18px 20px;
+        }
+
+        .password-field {
+            margin-bottom: 12px;
+        }
+
+        .password-field label {
+            display: block;
+            font-weight: 500;
+            color: #6b7280;
+            margin-bottom: 6px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .password-field .value {
+            background: #f9fafb;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border: 1px solid #e5e7eb;
+        }
+
+        /* Nicer select styling for folder dropdowns */
+        .password-field .value select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-color: #ffffff;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            padding: 10px 36px 10px 12px;
+            font-size: 14px;
+            color: #111827;
+            cursor: pointer;
+            width: 220px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 16px;
+        }
+
+        .password-field .value select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .password-field .value input {
+            background: transparent;
+            border: none;
+            font-family: inherit;
+            font-size: 14px;
+            width: 100%;
+            outline: none;
+            color: #111827;
+        }
+
+        .copy-btn {
+            background: #1a1a1a;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 6px;
+            font-weight: 500;
+            transition: background 0.15s ease;
+        }
+
+        .copy-btn:hover {
+            background: #000000;
+        }
+
+        .card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .card-actions .btn {
+            flex: 1;
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            overflow-y: auto; /* allow scrolling when content is taller than viewport */
+        }
+
+        .modal-content {
+            background-color: #ffffff;
+            margin: 5% auto;
+            padding: 32px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 480px;
+            max-height: 90vh; /* constrain height */
+            overflow-y: auto; /* scroll inside modal */
+            position: relative;
+            animation: modalSlideIn 0.2s ease;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .close {
+            position: absolute;
+            right: 24px;
+            top: 24px;
+            font-size: 20px;
+            font-weight: 400;
+            cursor: pointer;
+            color: #9ca3af;
+            line-height: 1;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .close:hover {
+            color: #374151;
+            background: #f3f4f6;
+        }
+
+        .modal h2 {
+            margin-bottom: 24px;
+            color: #111827;
+            font-weight: 600;
+            font-size: 1.25rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+            color: #888;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 16px;
+            color: #2c2c2c;
+            font-weight: 400;
+        }
+
+        .notification {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 500;
+            z-index: 1001;
+            transform: translateX(120%);
+            transition: transform 0.2s ease;
+            font-size: 14px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.success {
+            background: #10b981;
+        }
+
+        .notification.error {
+            background: #ef4444;
+        }
+
+        .strength-meter {
+            height: 3px;
+            background: #f0f0f0;
+            border-radius: 2px;
+            margin-top: 6px;
+            overflow: hidden;
+        }
+
+        .strength-bar {
+            height: 100%;
+            transition: width 0.2s ease, background-color 0.2s ease;
+        }
+
+        .strength-weak { background: #dc3545; }
+        .strength-medium { background: #ffc107; }
+        .strength-strong { background: #28a745; }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .toolbar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .btn-group {
+                justify-content: center;
+            }
+
+            .password-header {
+                padding: 12px 16px;
+            }
+
+            .password-header h3 {
+                font-size: 0.95rem;
+            }
+
+            .password-details {
+                padding: 16px;
+            }
+
+            .pagination {
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+
+            .pagination button {
+                padding: 6px 10px;
+                font-size: 13px;
+                min-width: 36px;
+            }
+
+            .pagination-info {
+                margin: 8px 0;
+                width: 100%;
+                text-align: center;
+            }
+
+            .modal-content {
+                margin: 10% auto;
+                width: 95%;
+                padding: 20px;
+            }
+        }
+
+        .export-import-section {
+            background: #f9fafb;
+            padding: 32px;
+            border-radius: 16px;
+            margin-top: 40px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .export-import-section h3 {
+            margin-bottom: 12px;
+            color: #111827;
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+
+        .export-import-section p {
+            color: #6b7280;
+            margin-bottom: 24px;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+
+        .export-import-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .export-import-buttons .btn,
+        .export-import-buttons .file-label {
+            flex: 1;
+            min-width: 160px;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            background: #1a1a1a;
+            color: white;
+            border: none;
+        }
+
+        .file-label:hover {
+            background: #000000;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 80px 24px;
+            color: #6b7280;
+        }
+
+        .spinner {
+            border: 2px solid #f3f4f6;
+            border-top: 2px solid #1a1a1a;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        .initial-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .initial-loading .loading-content {
+            text-align: center;
+            color: #6b7280;
+        }
+
+        .initial-loading h2 {
+            margin-bottom: 16px;
+            color: #1a1a1a;
+            font-weight: 600;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            margin-top: 32px;
+            padding: 20px 0;
+        }
+
+        .pagination button {
+            background: #ffffff;
+            border: 1px solid #d1d5db;
+            color: #374151;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.15s ease;
+            min-width: 40px;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #f9fafb;
+            border-color: #9ca3af;
+        }
+
+        .pagination button.active {
+            background: #1a1a1a;
+            color: white;
+            border-color: #1a1a1a;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination-info {
+            color: #6b7280;
+            font-size: 14px;
+            margin: 0 16px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Initial Loading Screen -->
+    <div class="initial-loading" id="initialLoading">
+        <div class="loading-content">
+            <h2>Passwort Manager</h2>
+            <div class="spinner"></div>
+            <p>Prüfe Session...</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1>Passwort Manager</h1>
+            <p>Sicher und minimalistisch</p>
+            <div class="header-actions" id="headerActions" style="display: none;">
+                <button class="btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Login Screen -->
+        <div class="login-screen" id="loginScreen" style="display: none;">
+            <div class="login-form">
+                <h2 id="loginTitle">Master-Passwort eingeben</h2>
+                <p id="loginDescription" style="margin: 20px 0; color: #7f8c8d;">
+                    Geben Sie Ihr Master-Passwort ein, um auf Ihre verschlüsselten Passwörter zuzugreifen.
+                </p>
+                <div class="form-group">
+                    <label for="masterPassword">Master-Passwort:</label>
+                    <input type="password" id="masterPassword" placeholder="Ihr Master-Passwort eingeben">
+                </div>
+                <button class="btn" onclick="login()" id="loginButton">Anmelden</button>
+                <div style="margin-top: 20px; text-align: center;">
+                    <button class="btn btn-secondary" onclick="showMasterPasswordManager()" style="width: auto; padding: 10px 20px;">
+                        Master-Passwörter verwalten
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent" style="display: none;">
+            <div class="toolbar">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Passwörter durchsuchen...">
+                    <span class="search-icon">⌕</span>
+                </div>
+                <div class="folder-box">
+                    <select id="folderSelect" aria-label="Ordnerfilter">
+                        <option value="all">Alle Ordner</option>
+                        <option value="null">Ohne Ordner</option>
+                    </select>
+                </div>
+                <div class="sort-box">
+                    <select id="sortSelect" aria-label="Sortierung">
+                        <option value="az">Titel A–Z</option>
+                        <option value="za">Titel Z–A</option>
+                    </select>
+                </div>
+                <div class="btn-group">
+                    <button class="btn" onclick="showAddPasswordModal()">+ Neues Passwort</button>
+                    <button class="btn btn-secondary" id="manageFoldersBtn">Ordner verwalten</button>
+                </div>
+            </div>
+
+            <div id="passwordsContainer">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Lade Passwörter...</p>
+                </div>
+            </div>
+
+            <div class="export-import-section">
+                <h3>Datenverwaltung</h3>
+                <p>Exportieren Sie Ihre Passwörter zur Sicherung oder importieren Sie sie von einem anderen Gerät.</p>
+                <div class="export-import-buttons">
+                    <button class="btn btn-success" onclick="exportData()">Alle Daten exportieren</button>
+                    <label for="importFile" class="file-label">Daten importieren</label>
+                    <input type="file" id="importFile" class="file-input" accept=".json" onchange="importData(event)">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Password Modal -->
+    <div id="passwordModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('passwordModal')">&times;</span>
+            <h2 id="modalTitle">Neues Passwort hinzufügen</h2>
+            <form id="passwordForm">
+                <div class="form-group">
+                    <label for="title">Titel:</label>
+                    <input type="text" id="title" required>
+                </div>
+                <div class="form-group">
+                    <label for="passwordFolder">Ordner (optional):</label>
+                    <select id="passwordFolder">
+                        <option value="">Ohne Ordner</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="username">Benutzername/E-Mail:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Passwort:</label>
+                    <input type="password" id="password" required>
+                    <div class="strength-meter">
+                        <div class="strength-bar" id="strengthBar"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="url">URL (optional):</label>
+                    <input type="text" id="url" placeholder="example.com">
+                </div>
+                <div class="form-group">
+                    <label for="notes">Notizen (optional):</label>
+                    <textarea id="notes" rows="3" style="width: 100%; padding: 15px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; resize: vertical;"></textarea>
+                </div>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-secondary" onclick="generatePassword()">🔧 Passwort generieren</button>
+                    <button type="submit" class="btn">Speichern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Master Password Manager Modal -->
+    <div id="masterPasswordModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <span class="close" onclick="closeModal('masterPasswordModal')">&times;</span>
+            <h2>🔑 Master-Passwörter verwalten</h2>
+            
+            <!-- Add new master password -->
+            <div style="margin-bottom: 30px; padding: 20px; background: #f8f9fa; border-radius: 8px;">
+                <h3>Neues Master-Passwort hinzufügen</h3>
+                <form id="masterPasswordForm">
+                    <div class="form-group">
+                        <label for="masterPasswordName">Name (optional):</label>
+                        <input type="text" id="masterPasswordName" placeholder="z.B. Hauptzugang, Backup, etc.">
+                    </div>
+                    <div class="form-group">
+                        <label for="newMasterPassword">Master-Passwort:</label>
+                        <input type="password" id="newMasterPassword" placeholder="Mindestens 8 Zeichen" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmNewMasterPassword">Passwort bestätigen:</label>
+                        <input type="password" id="confirmNewMasterPassword" placeholder="Passwort wiederholen" required>
+                    </div>
+                    <div class="form-group" id="existingMasterPasswordGroup" style="display:none;">
+                        <label for="existingMasterPasswordConfirm">Bestehendes Master-Passwort (Bestätigung):</label>
+                        <input type="password" id="existingMasterPasswordConfirm" placeholder="Aktuelles Master-Passwort eingeben">
+                        <small style="color:#6b7280;">Erforderlich, wenn bereits Master-Passwörter existieren.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="newMasterPasswordHint">Passworthilfe (optional):</label>
+                        <input type="text" id="newMasterPasswordHint" placeholder="Ein Hinweis, der das Passwort nicht verrät">
+                    </div>
+                    <button type="submit" class="btn">Hinzufügen</button>
+                </form>
+            </div>
+
+            <!-- List existing master passwords -->
+            <div>
+                <h3>Vorhandene Master-Passwörter</h3>
+                <div id="masterPasswordsList">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Lade Master-Passwörter...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Generic Confirm/Prompt Modal -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 460px;">
+            <span class="close" onclick="closeModal('confirmModal')">&times;</span>
+            <h2 id="confirmTitle">Bestätigen</h2>
+            <p id="confirmMessage" style="margin-bottom:16px; color:#374151;"></p>
+            <div id="confirmPasswordGroup" class="form-group" style="display:none;">
+                <label for="confirmPasswordInput">Zur Bestätigung Master-Passwort eingeben:</label>
+                <input type="password" id="confirmPasswordInput" placeholder="Master-Passwort">
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:16px;">
+                <button id="confirmCancelBtn" class="btn btn-secondary" style="width:auto;">Abbrechen</button>
+                <button id="confirmOkBtn" class="btn" style="width:auto;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Folders Modal -->
+    <div id="foldersModal" class="modal">
+        <div class="modal-content" style="max-width: 560px;">
+            <span class="close" onclick="closeModal('foldersModal')">&times;</span>
+            <h2>📁 Ordner verwalten</h2>
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label for="newFolderName">Neuer Ordnername:</label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="newFolderName" placeholder="z.B. E-Mail, Banking, Arbeit">
+                    <button class="btn" id="createFolderBtn" style="width:auto;">Hinzufügen</button>
+                </div>
+            </div>
+            <div id="foldersList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Register Service Worker for PWA (best-effort)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+            });
+        }
+        let uiEventsBound = false;
+        let toastTimer = null;
+
+        const showToast = (message, type = 'success') => {
+            const notification = document.getElementById('notification');
+            if (!notification) return;
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            // Force reflow to restart CSS transition if needed
+            // eslint-disable-next-line no-unused-expressions
+            notification.offsetHeight;
+            notification.classList.add('show');
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        };
+
+        // ---------- Local Mode (IndexedDB + WebCrypto) helpers ----------
+        const textEncoder = new TextEncoder();
+        const textDecoder = new TextDecoder();
+
+        const toHex = (buf) => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        const fromHex = (hex) => new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16))).buffer;
+
+        const deriveAesKeyFromString = async (keyString, saltBytes) => {
+            const keyMaterial = await crypto.subtle.importKey(
+                'raw',
+                textEncoder.encode(keyString),
+                'PBKDF2',
+                false,
+                ['deriveKey']
+            );
+            const key = await crypto.subtle.deriveKey(
+                { name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' },
+                keyMaterial,
+                { name: 'AES-CBC', length: 256 },
+                false,
+                ['encrypt', 'decrypt']
+            );
+            return key;
+        };
+
+        const pbkdf2HashHex = async (password, saltBytes, byteLength = 64) => {
+            const keyMaterial = await crypto.subtle.importKey('raw', textEncoder.encode(password), 'PBKDF2', false, ['deriveBits']);
+            const bits = await crypto.subtle.deriveBits(
+                { name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256' },
+                keyMaterial,
+                byteLength * 8
+            );
+            return toHex(bits);
+        };
+
+        const encryptStringAesCbc = async (plaintext, key) => {
+            const iv = crypto.getRandomValues(new Uint8Array(16));
+            const enc = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, textEncoder.encode(plaintext));
+            return { encrypted: toHex(enc), iv: toHex(iv) };
+        };
+
+        const decryptStringAesCbc = async (encryptedHex, ivHex, key) => {
+            const data = fromHex(encryptedHex);
+            const iv = new Uint8Array(fromHex(ivHex));
+            const dec = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, data);
+            return textDecoder.decode(dec);
+        };
+
+        const wrapDataKeyForPassword = async (password, saltHex, dataKeyHex) => {
+            const saltBytes = new Uint8Array(fromHex(saltHex));
+            const wrapperKey = await deriveAesKeyFromString(password, saltBytes);
+            const { encrypted, iv } = await encryptStringAesCbc(dataKeyHex, wrapperKey);
+            return { wrappedDataKey: encrypted, wrapIv: iv };
+        };
+
+        const unwrapDataKeyWithPassword = async (password, saltHex, wrappedDataKeyHex, wrapIvHex) => {
+            const saltBytes = new Uint8Array(fromHex(saltHex));
+            const wrapperKey = await deriveAesKeyFromString(password, saltBytes);
+            const dataKeyHex = await decryptStringAesCbc(wrappedDataKeyHex, wrapIvHex, wrapperKey);
+            return dataKeyHex;
+        };
+
+        const openLocalDb = () => new Promise((resolve, reject) => {
+            const req = indexedDB.open('passwortmanager', 1);
+            req.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta', { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+
+        const idbGet = async (key) => {
+            const db = await openLocalDb();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('meta', 'readonly');
+                const store = tx.objectStore('meta');
+                const g = store.get(key);
+                g.onsuccess = () => resolve(g.result ? g.result.value : null);
+                g.onerror = () => reject(g.error);
+            });
+        };
+
+        const idbSet = async (key, value) => {
+            const db = await openLocalDb();
+            return new Promise((resolve, reject) => {
+                const tx = db.transaction('meta', 'readwrite');
+                const store = tx.objectStore('meta');
+                store.put({ key, value });
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => reject(tx.error);
+            });
+        };
+
+        const ENCRYPTION_SCHEME = 'dataKey-v1';
+
+        const LocalMode = {
+            getMasterPasswords: async () => {
+                return (await idbGet('masterPasswords')) || [];
+            },
+            saveMasterPasswords: async (list) => {
+                await idbSet('masterPasswords', list || []);
+            },
+            getVaultEncrypted: async () => {
+                return (await idbGet('vault')) || null; // {encrypted, iv, salt, scheme}
+            },
+            saveVaultEncrypted: async (payload) => {
+                await idbSet('vault', payload);
+            },
+            loadVault: async (dataKeyHex) => {
+                const enc = await LocalMode.getVaultEncrypted();
+                if (!enc || !enc.encrypted) return { passwords: [], folders: [], encryptionScheme: ENCRYPTION_SCHEME };
+                const saltBytes = new Uint8Array(fromHex(enc.salt));
+                const key = await deriveAesKeyFromString(dataKeyHex, saltBytes);
+                const json = await decryptStringAesCbc(enc.encrypted, enc.iv, key);
+                const obj = JSON.parse(json || '{}');
+                obj.passwords = Array.isArray(obj.passwords) ? obj.passwords : [];
+                obj.folders = Array.isArray(obj.folders) ? obj.folders : [];
+                return obj;
+            },
+            saveVault: async (dataKeyHex, vaultObj) => {
+                const salt = crypto.getRandomValues(new Uint8Array(16));
+                const key = await deriveAesKeyFromString(dataKeyHex, salt);
+                const { encrypted, iv } = await encryptStringAesCbc(JSON.stringify(vaultObj || {}), key);
+                await LocalMode.saveVaultEncrypted({ encrypted, iv, salt: toHex(salt), scheme: ENCRYPTION_SCHEME });
+            },
+        };
+
+        class PasswordManager {
+            constructor() {
+                this.passwords = [];
+                this.masterPassword = '';
+                this.currentMasterPassword = null;
+                this.isAuthenticated = false;
+                this.modeChecked = false;
+                this.localMode = false;
+                this.dataKeyHex = null; // Local Mode only
+                // Support file:// fallback by reading ?port= from query
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    const port = params.get('port');
+                    this.apiBase = port ? `http://localhost:${port}/api` : '/api';
+                } catch (_) {
+                    this.apiBase = '/api';
+                }
+                this.currentPage = 1;
+                this.itemsPerPage = 25;
+                this.sortOrder = 'az';
+                this.folders = [];
+                this.selectedFolderId = 'all';
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+            }
+
+            async ensureMode() {
+                if (this.modeChecked) return;
+                try {
+                    const controller = new AbortController();
+                    const t = setTimeout(() => controller.abort(), 800);
+                    const res = await fetch(`${this.apiBase.replace(/\/api$/, '')}/api/health`, { signal: controller.signal, credentials: 'include' });
+                    clearTimeout(t);
+                    if (!res.ok) throw new Error('bad');
+                    this.localMode = false;
+                } catch (_) {
+                    this.localMode = true;
+                }
+                this.modeChecked = true;
+            }
+
+            setupEventListeners() {
+                if (uiEventsBound) return;
+
+                // Search functionality
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) {
+                    searchInput.addEventListener('input', (e) => {
+                        if (passwordManager) passwordManager.filterPasswords(e.target.value);
+                    });
+                }
+
+                // Password form
+                const passwordForm = document.getElementById('passwordForm');
+                if (passwordForm) {
+                    passwordForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        if (passwordManager) passwordManager.savePassword();
+                    });
+                }
+
+                // Password strength meter
+                const passwordInput = document.getElementById('password');
+                if (passwordInput) {
+                    passwordInput.addEventListener('input', (e) => {
+                        if (passwordManager) passwordManager.updatePasswordStrength(e.target.value);
+                    });
+                }
+
+                // Enter key for login
+                const masterPwInput = document.getElementById('masterPassword');
+                if (masterPwInput) {
+                    masterPwInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') login();
+                    });
+                }
+
+                // Sorting
+                const sortSelect = document.getElementById('sortSelect');
+                if (sortSelect) {
+                    sortSelect.addEventListener('change', (e) => {
+                        if (!passwordManager) return;
+                        passwordManager.sortOrder = e.target.value;
+                        passwordManager.renderPasswords();
+                    });
+                }
+
+                // Folder filter
+                const folderSelect = document.getElementById('folderSelect');
+                if (folderSelect) {
+                    folderSelect.addEventListener('change', (e) => {
+                        if (!passwordManager) return;
+                        passwordManager.selectedFolderId = e.target.value;
+                        passwordManager.currentPage = 1;
+                        passwordManager.renderPasswords();
+                    });
+                }
+
+                // Manage folders modal
+                const manageBtn = document.getElementById('manageFoldersBtn');
+                if (manageBtn) {
+                    manageBtn.addEventListener('click', () => {
+                        document.getElementById('foldersModal').style.display = 'block';
+                        if (passwordManager) passwordManager.renderFoldersList();
+                    });
+                }
+
+                // Create folder button in modal
+                const createBtn = document.getElementById('createFolderBtn');
+                if (createBtn) {
+                    createBtn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        if (createBtn.dataset.loading === '1') return;
+                        const input = document.getElementById('newFolderName');
+                        const name = (input?.value || '').trim();
+                        if (!name || !passwordManager) return;
+                        try {
+                            createBtn.dataset.loading = '1';
+                            createBtn.disabled = true;
+                            await passwordManager.createFolder(name);
+                            input.value = '';
+                            passwordManager.renderFoldersList();
+                        } finally {
+                            createBtn.disabled = false;
+                            delete createBtn.dataset.loading;
+                        }
+                    });
+                }
+
+                uiEventsBound = true;
+            }
+
+            normalizeUrl = (raw) => {
+                const input = String(raw || '').trim();
+                if (!input) return '';
+                if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(input)) return input;
+                if (input.startsWith('www.')) return `https://${input}`;
+                if (/^(localhost(?::\d+)?|\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?)/.test(input)) {
+                    return `http://${input}`;
+                }
+                if (/^[^\s@]+\.[^\s@]{2,}/.test(input)) return `https://${input}`;
+                return input;
+            }
+
+            async savePassword() {
+                const formData = {
+                    title: document.getElementById('title').value.trim(),
+                    username: document.getElementById('username').value.trim(),
+                    password: document.getElementById('password').value,
+                    url: this.normalizeUrl(document.getElementById('url').value),
+                    notes: document.getElementById('notes').value.trim(),
+                    folderId: document.getElementById('passwordFolder') ? (document.getElementById('passwordFolder').value || null) : null
+                };
+
+                if (!formData.title || !formData.username || !formData.password) {
+                    alert('Bitte füllen Sie alle Pflichtfelder aus.');
+                    return;
+                }
+
+                if (currentEditingId) {
+                    await this.updatePassword(currentEditingId, formData);
+                } else {
+                    await this.addPassword(formData);
+                }
+
+                closeModal('passwordModal');
+            }
+
+            async checkSessionStatus() {
+                await this.ensureMode();
+                if (this.localMode) {
+                    return this.isAuthenticated;
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/session-status`, {
+                        credentials: 'include'
+                    });
+                    if (!response.ok) {
+                        throw new Error('Failed to check session status');
+                    }
+                    const data = await response.json();
+                    return data.authenticated;
+                } catch (error) {
+                    console.error('Error checking session status:', error);
+                    return false;
+                }
+            }
+
+            async checkMasterPasswordStatus() {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const list = await LocalMode.getMasterPasswords();
+                    return Array.isArray(list) && list.length > 0;
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/master-password-status`);
+                    if (!response.ok) {
+                        throw new Error('Failed to check master password status');
+                    }
+                    const data = await response.json();
+                    return data.masterPasswordSet;
+                } catch (error) {
+                    console.error('Error checking master password status:', error);
+                    return false;
+                }
+            }
+
+            async addMasterPassword(password, name, hint = '') {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const list = await LocalMode.getMasterPasswords();
+                    if (list.length > 0) {
+                        // Need confirming existing password
+                        const confirming = this.confirmingPasswordForNew;
+                        if (!confirming) throw new Error('Confirmation with an existing master password is required');
+                        // Find matching entry to unwrap existing dataKey
+                        let matched = null;
+                        for (const mp of list) {
+                            const saltBytes = new Uint8Array(fromHex(mp.salt));
+                            const hash = await pbkdf2HashHex(confirming, saltBytes, 64);
+                            if (hash === mp.hashedPassword) { matched = mp; break; }
+                        }
+                        if (!matched || !matched.wrappedDataKey || !matched.wrapIv) throw new Error('Invalid confirmation master password');
+                        const dataKeyHex = await unwrapDataKeyWithPassword(confirming, matched.salt, matched.wrappedDataKey, matched.wrapIv);
+                        const salt = crypto.getRandomValues(new Uint8Array(16));
+                        const hashedPassword = await pbkdf2HashHex(password, salt, 64);
+                        const { wrappedDataKey, wrapIv } = await wrapDataKeyForPassword(password, toHex(salt), dataKeyHex);
+                        const newEntry = { id: crypto.randomUUID(), name: name || 'Master Password', hint: String(hint || ''), hashedPassword, salt: toHex(salt), createdAt: new Date().toISOString(), wrappedDataKey, wrapIv, isPrimary: false };
+                        list.push(newEntry);
+                        await LocalMode.saveMasterPasswords(list);
+                        this.dataKeyHex = dataKeyHex;
+                        this.isAuthenticated = true;
+                        return { masterPassword: { name: newEntry.name } };
+                    }
+                    // First password
+                    const salt = crypto.getRandomValues(new Uint8Array(16));
+                    const hashedPassword = await pbkdf2HashHex(password, salt, 64);
+                    const dataKeyHex = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b=>b.toString(16).padStart(2,'0')).join('');
+                    const { wrappedDataKey, wrapIv } = await wrapDataKeyForPassword(password, toHex(salt), dataKeyHex);
+                    const created = { id: crypto.randomUUID(), name: name || 'Master Password', hint: String(hint || ''), hashedPassword, salt: toHex(salt), createdAt: new Date().toISOString(), wrappedDataKey, wrapIv, isPrimary: true };
+                    await LocalMode.saveMasterPasswords([created]);
+                    // Initialize empty vault
+                    await LocalMode.saveVault(dataKeyHex, { passwords: [], folders: [], encryptionScheme: ENCRYPTION_SCHEME });
+                    this.dataKeyHex = dataKeyHex;
+                    this.isAuthenticated = true;
+                    return { masterPassword: { name: created.name } };
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/add-master-password`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ password, name, hint, confirmingPassword: this.confirmingPasswordForNew || undefined })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    const result = await response.json();
+                    // If this is the first login, set authentication
+                    if (!this.isAuthenticated) {
+                        this.masterPassword = password;
+                        this.currentMasterPassword = result.masterPassword;
+                        this.isAuthenticated = true;
+                    }
+                    return result;
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            async removeMasterPassword(id, confirmingPassword) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const list = await LocalMode.getMasterPasswords();
+                    const mp = list.find(m => m.id === id);
+                    if (!mp) throw new Error('Master password not found');
+                    const hash = await pbkdf2HashHex(confirmingPassword, new Uint8Array(fromHex(mp.salt)), 64);
+                    if (hash !== mp.hashedPassword) throw new Error('Invalid master password');
+                    const filtered = list.filter(m => m.id !== id);
+                    await LocalMode.saveMasterPasswords(filtered);
+                    // If no passwords left, optionally clear session
+                    if (filtered.length === 0) {
+                        this.isAuthenticated = false;
+                        this.dataKeyHex = null;
+                    }
+                    return { message: 'Master password removed successfully' };
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/remove-master-password/${id}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-confirming-password': confirmingPassword
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ confirmingPassword })
+                    });
+
+                    if (!response.ok) {
+                        let errorMsg = 'Fehler beim Löschen';
+                        try {
+                            const error = await response.json();
+                            errorMsg = error.error || errorMsg;
+                        } catch (_) {}
+                        throw new Error(errorMsg);
+                    }
+
+                    return await response.json();
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            async getMasterPasswords() {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const list = await LocalMode.getMasterPasswords();
+                    return list.map(mp => ({ id: mp.id, name: mp.name, hint: mp.hint || '', createdAt: mp.createdAt }));
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/master-passwords`);
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    return await response.json();
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            async verifyMasterPassword(password, confirmingPassword) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const list = await LocalMode.getMasterPasswords();
+                    for (const mp of list) {
+                        const hash = await pbkdf2HashHex(password, new Uint8Array(fromHex(mp.salt)), 64);
+                        if (hash === mp.hashedPassword) {
+                            // unwrap data key
+                            const dataKeyHex = await unwrapDataKeyWithPassword(password, mp.salt, mp.wrappedDataKey, mp.wrapIv);
+                            this.dataKeyHex = dataKeyHex;
+                            this.isAuthenticated = true;
+                            return { masterPassword: { id: mp.id, name: mp.name } };
+                        }
+                    }
+                    // If entry exists but not wrapped, require confirming password to link
+                    if (confirmingPassword) {
+                        // Try to find the entry by verifying confirmingPassword then wrap for provided password
+                        const existing = list.find(m => true); // any entry
+                        if (existing) {
+                            const confirmHash = await pbkdf2HashHex(confirmingPassword, new Uint8Array(fromHex(existing.salt)), 64);
+                            if (confirmHash === existing.hashedPassword) {
+                                const dk = await unwrapDataKeyWithPassword(confirmingPassword, existing.salt, existing.wrappedDataKey, existing.wrapIv);
+                                // find the target entry for 'password'
+                                for (const mp of list) {
+                                    const hash = await pbkdf2HashHex(password, new Uint8Array(fromHex(mp.salt)), 64);
+                                    if (hash === mp.hashedPassword && (!mp.wrappedDataKey || !mp.wrapIv)) {
+                                        const { wrappedDataKey, wrapIv } = await wrapDataKeyForPassword(password, mp.salt, dk);
+                                        mp.wrappedDataKey = wrappedDataKey; mp.wrapIv = wrapIv;
+                                        await LocalMode.saveMasterPasswords(list);
+                                        this.dataKeyHex = dk;
+                                        this.isAuthenticated = true;
+                                        return { masterPassword: { id: mp.id, name: mp.name } };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    throw new Error('Invalid master password');
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/verify-master-password`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ password, confirmingPassword })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        const err = new Error(error.error || 'Login failed');
+                        try { err.details = error; } catch (_) {}
+                        throw err;
+                    }
+
+                    const result = await response.json();
+                    this.masterPassword = password;
+                    this.currentMasterPassword = result.masterPassword;
+                    this.isAuthenticated = true;
+                    return result;
+                } catch (error) {
+                    throw error;
+                }
+            }
+
+            async loadPasswords() {
+                await this.ensureMode();
+                if (this.localMode) {
+                    if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    this.passwords = Array.isArray(vault.passwords) ? vault.passwords : [];
+                    this.renderPasswords();
+                    return;
+                }
+                try {
+                    if (!this.isAuthenticated) {
+                        throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    }
+
+                    const response = await fetch(`${this.apiBase}/all`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    this.passwords = await response.json();
+                    this.renderPasswords();
+                } catch (error) {
+                    this.showNotification('Fehler beim Laden der Passwörter: ' + error.message, 'error');
+                    this.renderPasswords([]);
+                }
+            }
+
+            async loadFolders() {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const vault = this.dataKeyHex ? await LocalMode.loadVault(this.dataKeyHex) : { folders: [] };
+                    this.folders = Array.isArray(vault.folders) ? vault.folders : [];
+                    this.hydrateFolderSelects();
+                    return;
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/folders`, { credentials: 'include' });
+                    if (!response.ok) throw new Error('Fehler beim Laden der Ordner');
+                    this.folders = await response.json();
+                    this.hydrateFolderSelects();
+                } catch (error) {
+                    console.error(error);
+                    this.folders = [];
+                    this.hydrateFolderSelects();
+                }
+            }
+
+            hydrateFolderSelects() {
+                // Toolbar filter
+                const filterSelect = document.getElementById('folderSelect');
+                if (filterSelect) {
+                    const current = this.selectedFolderId;
+                    const seen = new Set();
+                    const options = this.folders.filter(f => {
+                        const key = String(f.name || '').trim().toLowerCase();
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                    });
+                    filterSelect.innerHTML = '<option value="all">Alle Ordner</option><option value="null">Ohne Ordner</option>' +
+                        options.map(f => `<option value="${f.id}">${this.escapeHtml(f.name)}</option>`).join('');
+                    filterSelect.value = current || 'all';
+                }
+                // Modal select for password
+                const pwdSelect = document.getElementById('passwordFolder');
+                if (pwdSelect) {
+                    const seen2 = new Set();
+                    const options2 = this.folders.filter(f => {
+                        const key = String(f.name || '').trim().toLowerCase();
+                        if (seen2.has(key)) return false;
+                        seen2.add(key);
+                        return true;
+                    });
+                    pwdSelect.innerHTML = '<option value="">Ohne Ordner</option>' +
+                        options2.map(f => `<option value="${f.id}">${this.escapeHtml(f.name)}</option>`).join('');
+                }
+            }
+
+            async addPassword(passwordData) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    const newPassword = { id: crypto.randomUUID(), ...passwordData, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+                    vault.passwords = Array.isArray(vault.passwords) ? vault.passwords : [];
+                    vault.passwords.push(newPassword);
+                    vault.encryptionScheme = ENCRYPTION_SCHEME;
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    this.passwords.push(newPassword);
+                    this.renderPasswords();
+                    this.showNotification('Passwort erfolgreich gespeichert!', 'success');
+                    return;
+                }
+                try {
+                    if (!this.isAuthenticated) {
+                        throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    }
+
+                    const response = await fetch(`${this.apiBase}/add`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(passwordData)
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    const newPassword = await response.json();
+                    this.passwords.push(newPassword);
+                    this.renderPasswords();
+                    this.showNotification('Passwort erfolgreich gespeichert!', 'success');
+                } catch (error) {
+                    this.showNotification('Fehler beim Speichern: ' + error.message, 'error');
+                }
+            }
+
+            async updatePassword(id, passwordData) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    const idx = (vault.passwords || []).findIndex(p => p.id === id);
+                    if (idx === -1) throw new Error('Password not found');
+                    vault.passwords[idx] = { ...vault.passwords[idx], ...passwordData, updatedAt: new Date().toISOString() };
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    const localIdx = this.passwords.findIndex(p => p.id === id);
+                    if (localIdx !== -1) this.passwords[localIdx] = vault.passwords[idx];
+                    this.renderPasswords();
+                    this.showNotification('Passwort erfolgreich aktualisiert!', 'success');
+                    return;
+                }
+                try {
+                    if (!this.isAuthenticated) {
+                        throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    }
+
+                    const response = await fetch(`${this.apiBase}/update/${id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(passwordData)
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    const updatedPassword = await response.json();
+                    const index = this.passwords.findIndex(p => p.id === id);
+                    if (index !== -1) {
+                        this.passwords[index] = updatedPassword;
+                    }
+                    this.renderPasswords();
+                    this.showNotification('Passwort erfolgreich aktualisiert!', 'success');
+                } catch (error) {
+                    this.showNotification('Fehler beim Aktualisieren: ' + error.message, 'error');
+                }
+            }
+
+            async movePassword(id, folderId) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    const idx = (vault.passwords || []).findIndex(p => p.id === id);
+                    if (idx === -1) throw new Error('Password not found');
+                    vault.passwords[idx] = { ...vault.passwords[idx], folderId: folderId || null, updatedAt: new Date().toISOString() };
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    const localIdx = this.passwords.findIndex(p => p.id === id);
+                    if (localIdx !== -1) this.passwords[localIdx] = vault.passwords[idx];
+                    this.renderPasswords();
+                    this.showNotification('Verschoben', 'success');
+                    return;
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/passwords/${id}/move`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ folderId })
+                    });
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+                    const updated = await response.json();
+                    const index = this.passwords.findIndex(p => p.id === id);
+                    if (index !== -1) this.passwords[index] = updated;
+                    this.renderPasswords();
+                    this.showNotification('Verschoben', 'success');
+                } catch (error) {
+                    this.showNotification('Fehler beim Verschieben: ' + error.message, 'error');
+                }
+            }
+
+            async deletePassword(id) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    vault.passwords = (vault.passwords || []).filter(p => p.id !== id);
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    this.passwords = this.passwords.filter(p => p.id !== id);
+                    this.renderPasswords();
+                    this.showNotification('Passwort erfolgreich gelöscht!', 'success');
+                    return;
+                }
+                if (!confirm('Sind Sie sicher, dass Sie dieses Passwort löschen möchten?')) {
+                    return;
+                }
+
+                try {
+                    if (!this.isAuthenticated) {
+                        throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    }
+
+                    const response = await fetch(`${this.apiBase}/delete/${id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    this.passwords = this.passwords.filter(p => p.id !== id);
+                    this.renderPasswords();
+                    this.showNotification('Passwort erfolgreich gelöscht!', 'success');
+                } catch (error) {
+                    this.showNotification('Fehler beim Löschen: ' + error.message, 'error');
+                }
+            }
+
+            filterPasswords(searchTerm) {
+                // Reset to first page when filtering
+                this.currentPage = 1;
+                
+                const text = searchTerm.toLowerCase();
+                const filtered = this.passwords.filter(password => {
+                    const matchesText = password.title.toLowerCase().includes(text) ||
+                        password.username.toLowerCase().includes(text) ||
+                        (password.url && password.url.toLowerCase().includes(text));
+                    const matchesFolder = this.selectedFolderId === 'all'
+                        ? true
+                        : (this.selectedFolderId === 'null' ? (password.folderId == null) : password.folderId === this.selectedFolderId);
+                    return matchesText && matchesFolder;
+                });
+                this.renderPasswords(filtered);
+            }
+
+            renderPasswords(passwordsToRender = this.passwords) {
+                const container = document.getElementById('passwordsContainer');
+                
+                // Apply current folder filter if full list passed
+                if (passwordsToRender === this.passwords) {
+                    passwordsToRender = this.passwords.filter(p => {
+                        if (this.selectedFolderId === 'all') return true;
+                        if (this.selectedFolderId === 'null') return p.folderId == null;
+                        return p.folderId === this.selectedFolderId;
+                    });
+                }
+
+                if (passwordsToRender.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <h3>${this.passwords.length === 0 ? 'Keine Passwörter vorhanden' : 'Keine Passwörter gefunden'}</h3>
+                            <p>${this.passwords.length === 0 ? 'Fügen Sie Ihr erstes Passwort hinzu, um zu beginnen.' : 'Versuchen Sie einen anderen Suchbegriff.'}</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Sort by title according to current order
+                const collator = new Intl.Collator('de', { sensitivity: 'base', numeric: true });
+                const sorted = [...passwordsToRender].sort((a, b) => collator.compare(a.title, b.title));
+                if (this.sortOrder === 'za') {
+                    sorted.reverse();
+                }
+
+                // Calculate pagination after sorting
+                const totalPages = Math.ceil(sorted.length / this.itemsPerPage);
+                const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+                const endIndex = startIndex + this.itemsPerPage;
+                const currentPagePasswords = sorted.slice(startIndex, endIndex);
+
+                container.innerHTML = `
+                    <div class="passwords-list">
+                        ${currentPagePasswords.map(password => this.renderPasswordItem(password)).join('')}
+                    </div>
+                    ${this.renderPagination(totalPages, passwordsToRender.length)}
+                `;
+
+                // Add event listeners for expand/collapse
+                this.setupPasswordItemListeners();
+            }
+
+            renderPasswordItem(password) {
+                return `
+                    <div class="password-item" data-password-id="${password.id}">
+                        <div class="password-header">
+                            <h3>${this.escapeHtml(password.title)}</h3>
+                            <span class="expand-icon">▼</span>
+                        </div>
+                        <div class="password-content">
+                            <div class="password-details">
+                                <div class="password-field">
+                                    <label>Ordner:</label>
+                                    <div class="value">
+                                        <select onchange="passwordManager.movePassword('${password.id}', this.value || null)">
+                                            <option value="">Ohne Ordner</option>
+                                            ${this.folders.map(f => `<option value="${f.id}" ${password.folderId === f.id ? 'selected' : ''}>${this.escapeHtml(f.name)}</option>`).join('')}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="password-field">
+                                    <label>Benutzername:</label>
+                                    <div class="value">
+                                        <input type="text" value="${this.escapeHtml(password.username)}" readonly>
+                                        <button class="copy-btn" onclick="copyToClipboard('${this.escapeHtml(password.username)}')">Kopieren</button>
+                                    </div>
+                                </div>
+                                <div class="password-field">
+                                    <label>Passwort:</label>
+                                    <div class="value">
+                                        <input type="password" value="${this.escapeHtml(password.password)}" readonly id="pwd-${password.id}">
+                                        <button class="copy-btn" onclick="copyToClipboard('${this.escapeHtml(password.password)}')">Kopieren</button>
+                                        <button class="copy-btn" onclick="togglePasswordVisibility('${password.id}')">👁️</button>
+                                    </div>
+                                </div>
+                                ${password.url ? `
+                                    <div class="password-field">
+                                        <label>URL:</label>
+                                        <div class="value">
+                                            <input type="text" value="${this.escapeHtml(password.url)}" readonly>
+                                            <button class="copy-btn" onclick="copyToClipboard('${this.escapeHtml(password.url)}')">Kopieren</button>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                ${password.notes ? `
+                                    <div class="password-field">
+                                        <label>Notizen:</label>
+                                        <div class="value">
+                                            <textarea readonly style="width: 100%; border: none; background: transparent; resize: none; font-family: inherit;">${this.escapeHtml(password.notes)}</textarea>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                <div class="card-actions">
+                                    <button class="btn" onclick="editPassword('${password.id}')">Bearbeiten</button>
+                                    <button class="btn btn-danger" onclick="deletePassword('${password.id}')">Löschen</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            renderPagination(totalPages, totalItems) {
+                if (totalPages <= 1) return '';
+
+                const startItem = (this.currentPage - 1) * this.itemsPerPage + 1;
+                const endItem = Math.min(this.currentPage * this.itemsPerPage, totalItems);
+
+                let paginationHtml = '<div class="pagination">';
+                
+                // Previous button
+                paginationHtml += `<button onclick="passwordManager.goToPage(${this.currentPage - 1})" ${this.currentPage === 1 ? 'disabled' : ''}>‹</button>`;
+                
+                // Page numbers
+                const maxVisiblePages = 5;
+                let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
+                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                
+                if (endPage - startPage + 1 < maxVisiblePages) {
+                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                }
+
+                if (startPage > 1) {
+                    paginationHtml += `<button onclick="passwordManager.goToPage(1)">1</button>`;
+                    if (startPage > 2) {
+                        paginationHtml += '<span>...</span>';
+                    }
+                }
+
+                for (let i = startPage; i <= endPage; i++) {
+                    paginationHtml += `<button onclick="passwordManager.goToPage(${i})" class="${i === this.currentPage ? 'active' : ''}">${i}</button>`;
+                }
+
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        paginationHtml += '<span>...</span>';
+                    }
+                    paginationHtml += `<button onclick="passwordManager.goToPage(${totalPages})">${totalPages}</button>`;
+                }
+
+                // Next button
+                paginationHtml += `<button onclick="passwordManager.goToPage(${this.currentPage + 1})" ${this.currentPage === totalPages ? 'disabled' : ''}>›</button>`;
+                
+                paginationHtml += `<span class="pagination-info">${startItem}-${endItem} von ${totalItems}</span>`;
+                paginationHtml += '</div>';
+
+                return paginationHtml;
+            }
+
+            goToPage(page) {
+                this.currentPage = page;
+                this.renderPasswords();
+            }
+
+            setupPasswordItemListeners() {
+                const passwordItems = document.querySelectorAll('.password-item');
+                passwordItems.forEach(item => {
+                    const header = item.querySelector('.password-header');
+                    header.addEventListener('click', () => {
+                        item.classList.toggle('expanded');
+                    });
+                });
+            }
+
+            updatePasswordStrength(password) {
+                const strengthBar = document.getElementById('strengthBar');
+                let strength = 0;
+                let className = 'strength-weak';
+
+                if (password.length >= 8) strength += 25;
+                if (password.match(/[a-z]/)) strength += 25;
+                if (password.match(/[A-Z]/)) strength += 25;
+                if (password.match(/[0-9]/)) strength += 25;
+                if (password.match(/[^a-zA-Z0-9]/)) strength += 25;
+
+                if (strength >= 100) {
+                    className = 'strength-strong';
+                } else if (strength >= 50) {
+                    className = 'strength-medium';
+                }
+
+                strengthBar.style.width = Math.min(strength, 100) + '%';
+                strengthBar.className = 'strength-bar ' + className;
+            }
+
+            generateSecurePassword() {
+                const length = 16;
+                const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?';
+                let password = '';
+                
+                // Ensure at least one character from each category
+                password += 'abcdefghijklmnopqrstuvwxyz'[Math.floor(Math.random() * 26)];
+                password += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+                password += '0123456789'[Math.floor(Math.random() * 10)];
+                password += '!@#$%^&*()_+-=[]{}|;:,.<>?'[Math.floor(Math.random() * 32)];
+                
+                // Fill the rest randomly
+                for (let i = 4; i < length; i++) {
+                    password += charset[Math.floor(Math.random() * charset.length)];
+                }
+                
+                // Shuffle the password
+                return password.split('').sort(() => Math.random() - 0.5).join('');
+            }
+
+            async exportData() {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    const exportData = { version: '1.0', exportDate: new Date().toISOString(), passwords: vault.passwords || [] };
+                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `passwords_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    this.showNotification('Daten erfolgreich exportiert!', 'success');
+                    return;
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/export`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    const data = await response.json();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `passwords_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    this.showNotification('Daten erfolgreich exportiert!', 'success');
+                } catch (error) {
+                    this.showNotification('Fehler beim Exportieren: ' + error.message, 'error');
+                }
+            }
+
+            async importData(file) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    try {
+                        const text = await file.text();
+                        const data = JSON.parse(text);
+                        if (!data.passwords || !Array.isArray(data.passwords)) throw new Error('Ungültiges Dateiformat');
+                        const vault = await LocalMode.loadVault(this.dataKeyHex);
+                        vault.passwords = data.passwords.map(p => ({
+                            ...p,
+                            id: p.id || crypto.randomUUID(),
+                            createdAt: p.createdAt || new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        }));
+                        await LocalMode.saveVault(this.dataKeyHex, vault);
+                        await this.loadPasswords();
+                        this.showNotification('Daten erfolgreich importiert!', 'success');
+                    } catch (error) {
+                        this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
+                    }
+                    return;
+                }
+                try {
+                    const text = await file.text();
+                    const data = JSON.parse(text);
+                    
+                    if (!data.passwords || !Array.isArray(data.passwords)) {
+                        throw new Error('Ungültiges Dateiformat');
+                    }
+
+                    const response = await fetch(`${this.apiBase}/import`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ passwords: data.passwords })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    // Reload passwords after import
+                    await this.loadPasswords();
+                    this.showNotification('Daten erfolgreich importiert!', 'success');
+                } catch (error) {
+                    this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
+                }
+            }
+
+            showNotification(message, type = 'success') {
+                showToast(message, type);
+            }
+
+            // ------- Folder methods -------
+            async createFolder(name) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    vault.folders = Array.isArray(vault.folders) ? vault.folders : [];
+                    const normalized = String(name).trim().toLowerCase();
+                    const existing = vault.folders.find(f => String(f.name || '').trim().toLowerCase() === normalized);
+                    if (existing) { this.folders = vault.folders; return; }
+                    const newFolder = { id: crypto.randomUUID(), name: String(name).trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+                    vault.folders.push(newFolder);
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    this.folders = vault.folders;
+                    return;
+                }
+                try {
+                    const res = await fetch(`${this.apiBase}/folders`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ name })
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || 'Ordner konnte nicht erstellt werden');
+                    }
+                    await this.loadFolders();
+                    this.renderPasswords();
+                    this.showNotification('Ordner erstellt', 'success');
+                } catch (error) {
+                    this.showNotification(error.message, 'error');
+                }
+            }
+
+            async renameFolder(id) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    const input = document.querySelector(`input[data-folder-id='${id}']`);
+                    const name = (input?.value || '').trim();
+                    if (!name) return;
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    const idx = (vault.folders || []).findIndex(f => f.id === id);
+                    if (idx === -1) throw new Error('Folder not found');
+                    vault.folders[idx].name = name;
+                    vault.folders[idx].updatedAt = new Date().toISOString();
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    this.folders = vault.folders;
+                    this.renderFoldersList();
+                    this.renderPasswords();
+                    this.showNotification('Ordner umbenannt', 'success');
+                    return;
+                }
+                const input = document.querySelector(`input[data-folder-id='${id}']`);
+                const name = (input?.value || '').trim();
+                if (!name) return;
+                try {
+                    const res = await fetch(`${this.apiBase}/folders/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ name })
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || 'Ordner konnte nicht umbenannt werden');
+                    }
+                    await this.loadFolders();
+                    this.renderFoldersList();
+                    this.renderPasswords();
+                    this.showNotification('Ordner umbenannt', 'success');
+                } catch (error) {
+                    this.showNotification(error.message, 'error');
+                }
+            }
+
+            async deleteFolder(id) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    if (!confirm('Ordner wirklich löschen? Passwörter werden in "Ohne Ordner" verschoben.')) return;
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    vault.folders = (vault.folders || []).filter(f => f.id !== id);
+                    // Reassign passwords
+                    vault.passwords = (vault.passwords || []).map(p => p.folderId === id ? { ...p, folderId: null, updatedAt: new Date().toISOString() } : p);
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    this.folders = vault.folders;
+                    await this.loadPasswords();
+                    this.renderFoldersList();
+                    this.showNotification('Ordner gelöscht', 'success');
+                    return;
+                }
+                if (!confirm('Ordner wirklich löschen? Passwörter werden in "Ohne Ordner" verschoben.')) return;
+                try {
+                    const res = await fetch(`${this.apiBase}/folders/${id}?migrateTo=null`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        throw new Error(err.error || 'Ordner konnte nicht gelöscht werden');
+                    }
+                    await Promise.all([this.loadFolders(), this.loadPasswords()]);
+                    this.renderFoldersList();
+                    this.showNotification('Ordner gelöscht', 'success');
+                } catch (error) {
+                    this.showNotification(error.message, 'error');
+                }
+            }
+
+            renderFoldersList() {
+                const container = document.getElementById('foldersList');
+                if (!container) return;
+                if (this.folders.length === 0) {
+                    container.innerHTML = '<p style="color:#6b7280;">Noch keine Ordner angelegt.</p>';
+                    return;
+                }
+                container.innerHTML = this.folders.map(f => `
+                    <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid #f3f4f6;">
+                        <input type="text" value="${this.escapeHtml(f.name)}" data-folder-id="${f.id}" style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px;">
+                        <button class="btn btn-secondary" onclick="passwordManager.renameFolder('${f.id}')" style="width:auto;">Umbenennen</button>
+                        <button class="btn btn-danger" onclick="passwordManager.deleteFolder('${f.id}')" style="width:auto;">Löschen</button>
+                    </div>
+                `).join('');
+            }
+
+            async logout() {
+                await this.ensureMode();
+                if (this.localMode) {
+                    this.isAuthenticated = false;
+                    this.masterPassword = '';
+                    this.currentMasterPassword = null;
+                    this.dataKeyHex = null;
+                    return;
+                }
+                try {
+                    const response = await fetch(`${this.apiBase}/logout`, {
+                        method: 'POST',
+                        credentials: 'include'
+                    });
+                    
+                    if (response.ok) {
+                        this.isAuthenticated = false;
+                        this.masterPassword = '';
+                        this.currentMasterPassword = null;
+                        this.passwords = [];
+                    }
+                } catch (error) {
+                    console.error('Error during logout:', error);
+                }
+            }
+        }
+
+        // Global variables
+        let passwordManager;
+        let currentEditingId = null;
+
+        // Utility functions
+        async function login() {
+            const masterPassword = document.getElementById('masterPassword').value;
+
+            if (!masterPassword) {
+                alert('Bitte geben Sie ein Master-Passwort ein.');
+                return;
+            }
+
+            try {
+                // Show loading state
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('initialLoading').style.display = 'flex';
+                document.querySelector('#initialLoading .loading-content p').textContent = 'Anmelden...';
+                
+                passwordManager = new PasswordManager();
+                
+                // Check if master password is already set
+                const isSet = await passwordManager.checkMasterPasswordStatus();
+                console.log('Master password set:', isSet);
+                
+                if (isSet) {
+                    // Master password exists, verify it
+                    if (masterPassword.length < 8) {
+                        alert('Das Master-Passwort muss mindestens 8 Zeichen lang sein.');
+                        document.getElementById('initialLoading').style.display = 'none';
+                        document.getElementById('loginScreen').style.display = 'block';
+                        return;
+                    }
+                    
+                    console.log('Verifying master password...');
+                    try {
+                        await passwordManager.verifyMasterPassword(masterPassword);
+                    } catch (e) {
+                        const needsLink = (e.details && e.details.code === 'LINK_REQUIRED') || /Linking required/i.test(e.message || '');
+                        if (needsLink) {
+                            const confirming = prompt('Dieses Master-Passwort ist neu und muss mit einem bestehenden Master-Passwort verknüpft werden. Bitte bestehendes Master-Passwort eingeben:');
+                            if (!confirming) throw e;
+                            await passwordManager.verifyMasterPassword(masterPassword, confirming);
+                        } else {
+                            throw e;
+                        }
+                    }
+                    console.log('Master password verified successfully');
+                } else {
+                    // First time setup, add master password
+                    if (masterPassword.length < 8) {
+                        alert('Das Master-Passwort muss mindestens 8 Zeichen lang sein.');
+                        document.getElementById('initialLoading').style.display = 'none';
+                        document.getElementById('loginScreen').style.display = 'block';
+                        return;
+                    }
+                    
+                    console.log('Adding master password...');
+                    await passwordManager.addMasterPassword(masterPassword, 'Hauptzugang');
+                    console.log('Master password added successfully');
+                }
+                
+                console.log('Loading passwords...');
+                document.querySelector('#initialLoading .loading-content p').textContent = 'Lade Passwörter...';
+                await Promise.all([passwordManager.loadFolders(), passwordManager.loadPasswords()]);
+                console.log('Passwords loaded successfully');
+                
+                document.getElementById('initialLoading').style.display = 'none';
+                document.getElementById('mainContent').style.display = 'block';
+                document.getElementById('headerActions').style.display = 'block';
+                
+                // Clear form
+                document.getElementById('masterPassword').value = '';
+                
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Fehler beim Anmelden: ' + error.message);
+                // Show login screen again on error
+                document.getElementById('initialLoading').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'block';
+            }
+        }
+
+        async function logout() {
+            if (confirm('Sind Sie sicher, dass Sie sich abmelden möchten?')) {
+                if (passwordManager) {
+                    await passwordManager.logout();
+                }
+                passwordManager = null;
+                document.getElementById('loginScreen').style.display = 'block';
+                document.getElementById('mainContent').style.display = 'none';
+                document.getElementById('headerActions').style.display = 'none';
+                document.getElementById('passwordsContainer').innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Lade Passwörter...</p>
+                    </div>
+                `;
+            }
+        }
+
+        function showAddPasswordModal() {
+            currentEditingId = null;
+            document.getElementById('modalTitle').textContent = 'Neues Passwort hinzufügen';
+            document.getElementById('passwordForm').reset();
+            document.getElementById('passwordModal').style.display = 'block';
+            if (passwordManager) passwordManager.hydrateFolderSelects();
+        }
+
+        function editPassword(id) {
+            const password = passwordManager.passwords.find(p => p.id === id);
+            if (password) {
+                currentEditingId = id;
+                document.getElementById('modalTitle').textContent = 'Passwort bearbeiten';
+                document.getElementById('title').value = password.title;
+                if (passwordManager) passwordManager.hydrateFolderSelects();
+                const folderSelect = document.getElementById('passwordFolder');
+                if (folderSelect) folderSelect.value = password.folderId || '';
+                document.getElementById('username').value = password.username;
+                document.getElementById('password').value = password.password;
+                document.getElementById('url').value = password.url || '';
+                document.getElementById('notes').value = password.notes || '';
+                passwordManager.updatePasswordStrength(password.password);
+                document.getElementById('passwordModal').style.display = 'block';
+            }
+        }
+
+        async function deletePassword(id) {
+            await passwordManager.deletePassword(id);
+        }
+
+
+
+        function generatePassword() {
+            if (passwordManager) {
+                const generatedPassword = passwordManager.generateSecurePassword();
+                document.getElementById('password').value = generatedPassword;
+                passwordManager.updatePasswordStrength(generatedPassword);
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                passwordManager.showNotification('In Zwischenablage kopiert!', 'success');
+            }).catch(() => {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                passwordManager.showNotification('In Zwischenablage kopiert!', 'success');
+            });
+        }
+
+        function togglePasswordVisibility(id) {
+            const input = document.getElementById(`pwd-${id}`);
+            if (input.type === 'password') {
+                input.type = 'text';
+            } else {
+                input.type = 'password';
+            }
+        }
+
+        async function exportData() {
+            if (passwordManager) {
+                await passwordManager.exportData();
+            }
+        }
+
+        async function importData(event) {
+            const file = event.target.files[0];
+            if (file && passwordManager) {
+                await passwordManager.importData(file);
+            }
+            event.target.value = ''; // Reset file input
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modals = document.getElementsByClassName('modal');
+            for (let modal of modals) {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            }
+        }
+
+        // Master Password Management Functions
+        async function showMasterPasswordManager() {
+            document.getElementById('masterPasswordModal').style.display = 'block';
+            await loadMasterPasswordsList();
+    try {
+        const tempManager = new PasswordManager();
+        const isSet = await tempManager.checkMasterPasswordStatus();
+        const group = document.getElementById('existingMasterPasswordGroup');
+        if (group) group.style.display = isSet ? 'block' : 'none';
+        const input = document.getElementById('existingMasterPasswordConfirm');
+        if (input) input.required = !!isSet;
+    } catch (_) {}
+        }
+
+        async function loadMasterPasswordsList() {
+            try {
+                const tempManager = new PasswordManager();
+                const masterPasswords = await tempManager.getMasterPasswords();
+                
+                const container = document.getElementById('masterPasswordsList');
+                
+                if (masterPasswords.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #7f8c8d;">Keine Master-Passwörter vorhanden.</p>';
+                    return;
+                }
+
+                container.innerHTML = masterPasswords.map(mp => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid #e1e8ed; border-radius: 8px; margin-bottom: 10px;">
+                        <div>
+                            <strong>${mp.name}</strong>
+                            <br>
+                            ${mp.hint ? `<div style="color:#6b7280; font-size:12px; margin:4px 0;">Hinweis: ${mp.hint.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
+                            <small style="color: #7f8c8d;">Erstellt: ${new Date(mp.createdAt).toLocaleDateString('de-DE')}</small>
+                        </div>
+                        <button class="btn btn-danger" onclick="removeMasterPassword('${mp.id}')" style="padding: 8px 15px; font-size: 14px;">
+                            Löschen
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading master passwords:', error);
+                document.getElementById('masterPasswordsList').innerHTML = '<p style="color: #e74c3c;">Fehler beim Laden der Master-Passwörter.</p>';
+            }
+        }
+
+        async function openConfirmDialog({ title, message, requirePassword = false }) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('confirmModal');
+                const titleEl = document.getElementById('confirmTitle');
+                const msgEl = document.getElementById('confirmMessage');
+                const group = document.getElementById('confirmPasswordGroup');
+                const input = document.getElementById('confirmPasswordInput');
+                const cancelBtn = document.getElementById('confirmCancelBtn');
+                const okBtn = document.getElementById('confirmOkBtn');
+
+                titleEl.textContent = title || 'Bestätigen';
+                msgEl.textContent = message || '';
+                group.style.display = requirePassword ? 'block' : 'none';
+                input.value = '';
+                modal.style.display = 'block';
+
+                const cleanup = () => {
+                    cancelBtn.onclick = null;
+                    okBtn.onclick = null;
+                    modal.style.display = 'none';
+                };
+
+                cancelBtn.onclick = () => { cleanup(); resolve(null); };
+                okBtn.onclick = () => {
+                    const val = requirePassword ? input.value : true;
+                    if (requirePassword && !val) return;
+                    cleanup();
+                    resolve(val);
+                };
+            });
+        }
+
+        async function removeMasterPassword(id) {
+            const proceed = await openConfirmDialog({
+                title: 'Master-Passwort löschen',
+                message: 'Sind Sie sicher, dass Sie dieses Master-Passwort löschen möchten? Dies kann nicht rückgängig gemacht werden.'
+            });
+            if (!proceed) return;
+            const confirmingPassword = await openConfirmDialog({
+                title: 'Bestätigen',
+                message: 'Zur Bestätigung bitte das zu löschende Master-Passwort eingeben.',
+                requirePassword: true
+            });
+            if (!confirmingPassword) return;
+
+            try {
+                const tempManager = new PasswordManager();
+                await tempManager.removeMasterPassword(id, confirmingPassword);
+                await loadMasterPasswordsList();
+                showToast('Master-Passwort gelöscht', 'success');
+                try {
+                    const list = await tempManager.getMasterPasswords();
+                    if (!Array.isArray(list) || list.length === 0) {
+                        closeModal('masterPasswordModal');
+                    }
+                } catch (_) {}
+            } catch (error) {
+                let msg = String(error && error.message ? error.message : 'Unbekannter Fehler');
+                if (/invalid\s+master\s+password/i.test(msg)) {
+                    msg = 'Falsches Master-Passwort. Bitte erneut eingeben.';
+                }
+                showToast('Fehler beim Löschen: ' + msg, 'error');
+            }
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const tempManager = new PasswordManager();
+                
+                // Check if user is already authenticated
+                const isAuthenticated = await tempManager.checkSessionStatus();
+                if (isAuthenticated) {
+                    // User is already logged in, show main content
+                    passwordManager = tempManager;
+                    passwordManager.isAuthenticated = true;
+                    await Promise.all([passwordManager.loadFolders(), passwordManager.loadPasswords()]);
+                    document.getElementById('initialLoading').style.display = 'none';
+                    document.getElementById('mainContent').style.display = 'block';
+                    document.getElementById('headerActions').style.display = 'block';
+                    return;
+                }
+                
+                const isSet = await tempManager.checkMasterPasswordStatus();
+                
+                if (isSet) {
+                    // Master password exists - show login screen
+                    document.getElementById('loginTitle').textContent = 'Master-Passwort eingeben';
+                    document.getElementById('loginDescription').textContent = 'Geben Sie Ihr Master-Passwort ein, um auf Ihre verschlüsselten Passwörter zuzugreifen.';
+                    document.getElementById('loginButton').textContent = 'Anmelden';
+                } else {
+                    // First time setup - show registration screen
+                    document.getElementById('loginTitle').textContent = 'Master-Passwort erstellen';
+                    document.getElementById('loginDescription').textContent = 'Erstellen Sie ein sicheres Master-Passwort für Ihren Passwort-Manager.';
+                    document.getElementById('loginButton').textContent = 'Erstellen & Anmelden';
+                }
+
+                // Show appropriate screen
+                document.getElementById('initialLoading').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'block';
+                
+                // Setup master password form
+                document.getElementById('masterPasswordForm').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    
+                    const name = document.getElementById('masterPasswordName').value.trim() || 'Master Password';
+                    const password = document.getElementById('newMasterPassword').value;
+                    const confirmPassword = document.getElementById('confirmNewMasterPassword').value;
+                    const confirmingPassword = document.getElementById('existingMasterPasswordConfirm').value;
+
+                    if (password.length < 8) {
+                        alert('Das Master-Passwort muss mindestens 8 Zeichen lang sein.');
+                        return;
+                    }
+
+                    if (password !== confirmPassword) {
+                        alert('Die Passwörter stimmen nicht überein.');
+                        return;
+                    }
+
+                    try {
+                        const tempManager = new PasswordManager();
+                        const isSet = await tempManager.checkMasterPasswordStatus();
+                        if (isSet && !confirmingPassword) {
+                            alert('Bitte bestätigen Sie mit Ihrem bestehenden Master-Passwort.');
+                            return;
+                        }
+                        tempManager.confirmingPasswordForNew = isSet ? confirmingPassword : undefined;
+                        const hint = document.getElementById('newMasterPasswordHint').value.trim();
+                        await tempManager.addMasterPassword(password, name, hint);
+                        
+                        // Clear form
+                        document.getElementById('masterPasswordForm').reset();
+                        
+                        // Reload list
+                        await loadMasterPasswordsList();
+                        
+                        alert('Master-Passwort erfolgreich hinzugefügt!');
+                    } catch (error) {
+                        alert('Fehler beim Hinzufügen: ' + error.message);
+                    }
+                });
+            } catch (error) {
+                console.error('Error checking master password status:', error);
+                // Show login screen on error
+                document.getElementById('initialLoading').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 

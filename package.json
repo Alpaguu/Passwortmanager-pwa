@@ -1,0 +1,68 @@
+{
+  "name": "password-manager-backend",
+  "version": "1.1.0",
+  "description": "Lokaler Passwort-Manager (Backend + Desktop-App)",
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "main.js",
+  "scripts": {
+    "start": "bun server.js",
+    "dev": "bunx nodemon --exec bun server.js",
+    "app:dev": "bunx electron .",
+    "app:dist": "bunx electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "password-manager",
+    "encryption",
+    "local",
+    "nodejs"
+  ],
+  "dependencies": {
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-session": "^1.18.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "electron": "^37.2.6",
+    "electron-builder": "^26.0.12",
+    "nodemon": "^3.0.1",
+    "concurrently": "^8.2.2"
+  },
+  "build": {
+    "productName": "Passwortmanager",
+    "appId": "com.deinname.passwortmanager",
+    "asar": true,
+    "directories": {
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!dist/**"
+    ],
+    "extraResources": [
+      {
+        "from": "data/",
+        "to": "data",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.productivity",
+      "artifactName": "Passwortmanager-${version}-mac.${ext}"
+    },
+    "win": {
+      "target": "nsis",
+      "artifactName": "Passwortmanager-${version}-win.${ext}"
+    },
+    "linux": {
+      "target": "AppImage",
+      "artifactName": "Passwortmanager-${version}-linux.${ext}"
+    }
+  }
+}
