@@ -27,7 +27,8 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // Handle navigations: always serve index.html offline
-  if (request.mode === 'navigate') {
+  // iOS in standalone PWA may not set mode:navigate; also catch document requests
+  if (request.mode === 'navigate' || (request.headers.get('accept') || '').includes('text/html')) {
     event.respondWith(
       fetch(request).catch(() => caches.match('./index.html'))
     );
