@@ -1,10 +1,10 @@
 {
-  "id": "./",
+  "id": "/passwortmanager-pwa/",
   "name": "Passwortmanager",
   "short_name": "Passwortmanager",
   "description": "Sicherer, lokaler Passwort-Manager",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/passwortmanager-pwa/",
+  "scope": "/passwortmanager-pwa/",
   "display": "standalone",
   "theme_color": "#ffffff",
   "background_color": "#ffffff",
