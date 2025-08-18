@@ -39,7 +39,17 @@ app.use(session({
     rolling: true, // refresh expiration on each request
     store: new FileStore({
         retries: 0,
-        path: path.join(__dirname, 'data', 'sessions')
+        path: process.env.ELECTRON === 'true' 
+            ? path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'sessions')
+            : path.join(__dirname, 'data', 'sessions'),
+        ttl: 24 * 60 * 60, // 24 hours in seconds
+        reapInterval: 60 * 60, // Clean up expired sessions every hour
+        logFn: (message) => {
+            // Only log in development or when debugging
+            if (process.env.NODE_ENV === 'development') {
+                console.log('Session:', message);
+            }
+        }
     }),
     cookie: {
         // In Electron desktop (http://localhost) we must NOT require secure cookies
@@ -58,17 +68,49 @@ const FOLDERS_FILE = path.join(DATA_DIR, 'folders.json');
 
 // Session management
 const getMasterPassword = (req) => {
-    return req.session.masterPassword || null;
+    try {
+        return req.session?.masterPassword || null;
+    } catch (error) {
+        console.error('Error getting master password from session:', error);
+        return null;
+    }
 };
 
 const setMasterPassword = (req, password) => {
-    req.session.masterPassword = password;
-    req.session.authenticated = true;
-    req.session.lastActivity = new Date().toISOString();
+    try {
+        req.session.masterPassword = password;
+        req.session.authenticated = true;
+        req.session.lastActivity = new Date().toISOString();
+        
+        // Force session save to ensure it's written to disk
+        return new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Error saving session:', err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
+    } catch (error) {
+        console.error('Error setting master password in session:', error);
+        throw error;
+    }
 };
 
 const clearSession = (req) => {
-    req.session.destroy();
+    try {
+        if (req.session) {
+            req.session.destroy((err) => {
+                if (err) {
+                    console.error('Error destroying session:', err);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error clearing session:', error);
+    }
 };
 
 // Encryption utilities
@@ -407,14 +449,24 @@ class FileManager {
 
 // Authentication middleware
 const requireMasterPassword = (req, res, next) => {
-    const currentMasterPassword = getMasterPassword(req);
-    if (!currentMasterPassword || !req.session.authenticated) {
+    try {
+        const currentMasterPassword = getMasterPassword(req);
+        if (!currentMasterPassword || !req.session?.authenticated) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+            return res.status(401).json({ 
+                error: 'Not authenticated. Please login with your master password.',
+                code: 'AUTH_REQUIRED'
+            });
+        }
+        next();
+    } catch (error) {
+        console.error('Authentication middleware error:', error);
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         return res.status(401).json({ 
-            error: 'Not authenticated. Please login with your master password.' 
+            error: 'Session error. Please login again.',
+            code: 'SESSION_ERROR'
         });
     }
-    next();
 };
 
 // API Routes
@@ -459,7 +511,15 @@ app.post('/api/add-master-password', async (req, res) => {
             list.push(newMasterPassword);
             await FileManager.saveMasterPasswords(list);
             // Important: set session to DataKey, not plaintext password
-            setMasterPassword(req, dataKey);
+            try {
+                await setMasterPassword(req, dataKey);
+            } catch (sessionError) {
+                console.error('Failed to set session for new master password:', sessionError);
+                return res.status(500).json({ 
+                    error: 'Failed to create session. Please try again.',
+                    code: 'SESSION_CREATION_FAILED'
+                });
+            }
         } else {
             // First password: create datakey and wrap it
             const created = await FileManager.addMasterPassword(password, name || 'Master Password', hint || '');
@@ -469,7 +529,15 @@ app.post('/api/add-master-password', async (req, res) => {
             const updated = list.map(mp => mp.id === created.id ? { ...mp, wrappedDataKey, wrapIv } : mp);
             await FileManager.saveMasterPasswords(updated);
             // Important: set session to DataKey so all subsequent ops use it
-            setMasterPassword(req, dataKeyHex);
+            try {
+                await setMasterPassword(req, dataKeyHex);
+            } catch (sessionError) {
+                console.error('Failed to set session for new master password:', sessionError);
+                return res.status(500).json({ 
+                    error: 'Failed to create session. Please try again.',
+                    code: 'SESSION_CREATION_FAILED'
+                });
+            }
         }
         
         res.json({ 
@@ -610,11 +678,28 @@ app.post('/api/verify-master-password', async (req, res) => {
         }
 
         // Set current session to DataKey
-        setMasterPassword(req, dataKey);
+        await setMasterPassword(req, dataKey);
         // Explicitly save the session before responding to avoid race conditions on immediate next request
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => err ? reject(err) : resolve());
-        });
+        try {
+            await new Promise((resolve, reject) => {
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('Error saving session after login:', err);
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+        } catch (sessionError) {
+            console.error('Failed to save session after login:', sessionError);
+            // Clear the session and return error
+            clearSession(req);
+            return res.status(500).json({ 
+                error: 'Failed to create session. Please try again.',
+                code: 'SESSION_CREATION_FAILED'
+            });
+        }
 
         res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
         res.json({ 
@@ -827,7 +912,17 @@ app.post('/api/logout', (req, res) => {
 // Check session status
 app.get('/api/session-status', async (req, res) => {
     try {
-        let isAuthenticated = Boolean(req.session.authenticated && getMasterPassword(req));
+        let isAuthenticated = false;
+        let sessionValid = false;
+        
+        try {
+            sessionValid = Boolean(req.session && req.session.authenticated);
+            isAuthenticated = Boolean(sessionValid && getMasterPassword(req));
+        } catch (sessionError) {
+            console.error('Session validation error:', sessionError);
+            sessionValid = false;
+            isAuthenticated = false;
+        }
 
         if (isAuthenticated) {
             // Extra validation: ensure a master password still exists and the session password is valid
@@ -838,7 +933,8 @@ app.get('/api/session-status', async (req, res) => {
                     clearSession(req);
                     isAuthenticated = false;
                 }
-            } catch (_) {
+            } catch (validationError) {
+                console.error('Master password validation error:', validationError);
                 // On any error, consider session invalid
                 clearSession(req);
                 isAuthenticated = false;
@@ -847,20 +943,47 @@ app.get('/api/session-status', async (req, res) => {
 
         res.json({ 
             authenticated: isAuthenticated,
-            lastActivity: req.session?.lastActivity || null
+            sessionValid: sessionValid,
+            lastActivity: req.session?.lastActivity || null,
+            timestamp: new Date().toISOString()
         });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        console.error('Session status check error:', error);
+        res.status(500).json({ 
+            error: 'Failed to check session status',
+            authenticated: false,
+            sessionValid: false
+        });
     }
 });
 
 // Health check
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
-        timestamp: new Date().toISOString(),
-        sessionActive: req.session.authenticated || false
-    });
+    try {
+        const sessionInfo = {
+            hasSession: Boolean(req.session),
+            authenticated: Boolean(req.session?.authenticated),
+            hasMasterPassword: Boolean(getMasterPassword(req)),
+            sessionId: req.session?.id || null
+        };
+        
+        res.json({ 
+            status: 'OK', 
+            timestamp: new Date().toISOString(),
+            sessionActive: req.session?.authenticated || false,
+            sessionInfo: sessionInfo,
+            dataDir: DATA_DIR,
+            electron: process.env.ELECTRON === 'true',
+            nodeEnv: process.env.NODE_ENV
+        });
+    } catch (error) {
+        console.error('Health check error:', error);
+        res.status(500).json({ 
+            status: 'ERROR',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
 // Serve the frontend

@@ -1581,6 +1581,12 @@
                         throw new Error('Failed to check session status');
                     }
                     const data = await response.json();
+                    
+                    // Log session info for debugging
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log('Session status:', data);
+                    }
+                    
                     return data.authenticated;
                 } catch (error) {
                     console.error('Error checking session status:', error);
@@ -1659,7 +1665,14 @@
 
                     if (!response.ok) {
                         const error = await response.json();
-                        throw new Error(error.error);
+                        const err = new Error(error.error || 'Failed to add master password');
+                        
+                        // Handle specific error codes
+                        if (error.code === 'SESSION_CREATION_FAILED') {
+                            err.message = 'Fehler beim Erstellen der Sitzung. Bitte versuchen Sie es erneut.';
+                        }
+                        
+                        throw err;
                     }
 
                     const result = await response.json();
@@ -1668,6 +1681,9 @@
                         this.masterPassword = password;
                         this.currentMasterPassword = result.masterPassword;
                         this.isAuthenticated = true;
+                        
+                        // Cache the password for transparent re-login
+                        this.cachedMasterPassword = password;
                     }
                     return result;
                 } catch (error) {
@@ -1791,6 +1807,16 @@
                         const error = await response.json();
                         const err = new Error(error.error || 'Login failed');
                         try { err.details = error; } catch (_) {}
+                        
+                        // Handle specific error codes
+                        if (error.code === 'SESSION_CREATION_FAILED') {
+                            err.message = 'Fehler beim Erstellen der Sitzung. Bitte versuchen Sie es erneut.';
+                        } else if (error.code === 'LINK_REQUIRED') {
+                            err.message = 'Verknüpfung erforderlich. Bitte bestätigen Sie mit einem bestehenden Master-Passwort.';
+                        } else if (error.code === 'MIGRATION_CONFIRM_REQUIRED') {
+                            err.message = 'Migration erforderlich. Bitte bestätigen Sie mit einem bestehenden Master-Passwort.';
+                        }
+                        
                         throw err;
                     }
 
@@ -1798,7 +1824,11 @@
                     this.masterPassword = password;
                     this.currentMasterPassword = result.masterPassword;
                     this.isAuthenticated = true;
-                    return result;
+                    
+                    // Cache the password for transparent re-login
+                    this.cachedMasterPassword = password;
+                    
+                    return result
                 } catch (error) {
                     throw error;
                 }
@@ -1852,6 +1882,9 @@
                             document.getElementById('mainContent').style.display = 'none';
                             document.getElementById('headerActions').style.display = 'none';
                             document.getElementById('loginScreen').style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
                         }
                         throw new Error('Fehler beim Laden der Ordner');
                     }
@@ -1953,6 +1986,9 @@
                             if (main) main.style.display = 'none';
                             if (header) header.style.display = 'none';
                             if (login) login.style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
                         }
                         const error = await response.json().catch(() => ({ error: 'Unbekannter Fehler' }));
                         throw new Error(error.error || 'Fehler');
@@ -2041,6 +2077,9 @@
                             document.getElementById('mainContent').style.display = 'none';
                             document.getElementById('headerActions').style.display = 'none';
                             document.getElementById('loginScreen').style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
                         }
                         const error = await response.json();
                         throw new Error(error.error);
@@ -2417,6 +2456,9 @@
                             document.getElementById('mainContent').style.display = 'none';
                             document.getElementById('headerActions').style.display = 'none';
                             document.getElementById('loginScreen').style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
                         }
                         throw new Error('Ordner-Reihenfolge konnte nicht gespeichert werden');
                     }
@@ -2642,6 +2684,9 @@
                             document.getElementById('mainContent').style.display = 'none';
                             document.getElementById('headerActions').style.display = 'none';
                             document.getElementById('loginScreen').style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
                         }
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.error || 'Ordner konnte nicht erstellt werden');
@@ -2698,6 +2743,9 @@
                             document.getElementById('mainContent').style.display = 'none';
                             document.getElementById('headerActions').style.display = 'none';
                             document.getElementById('loginScreen').style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
                         }
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.error || 'Ordner konnte nicht umbenannt werden');
@@ -2750,6 +2798,9 @@
                             document.getElementById('mainContent').style.display = 'none';
                             document.getElementById('headerActions').style.display = 'none';
                             document.getElementById('loginScreen').style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
                         }
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.error || 'Ordner konnte nicht gelöscht werden');
@@ -2830,6 +2881,9 @@
                 const isSet = await passwordManager.checkMasterPasswordStatus();
                 console.log('Master password set:', isSet);
                 
+                // Add a small delay to ensure the backend is ready
+                await new Promise(resolve => setTimeout(resolve, 100));
+                
                 if (isSet) {
                     // Master password exists, verify it
                     if (masterPassword.length < 8) {
@@ -2843,7 +2897,7 @@
                         try {
                         await passwordManager.verifyMasterPassword(masterPassword);
                         // mini delay -> file-store writes are fs-based
-                        await new Promise(r => setTimeout(r, 40));
+                        await new Promise(r => setTimeout(r, 600000000000)); // Increased delay for session creation
                         passwordManager.cachedMasterPassword = masterPassword;
                         } catch (e) {
                             const needsLink = (e.details && e.details.code === 'LINK_REQUIRED') || /Linking required/i.test(e.message || '');
@@ -2867,7 +2921,7 @@
                     
                     console.log('Adding master password...');
                     await passwordManager.addMasterPassword(masterPassword, 'Hauptzugang');
-                    await new Promise(r => setTimeout(r, 40));
+                    await new Promise(r => setTimeout(r, 600000000000)); // Increased delay for session creation
                     passwordManager.cachedMasterPassword = masterPassword;
                     console.log('Master password added successfully');
                 }
@@ -2886,7 +2940,22 @@
                 
             } catch (error) {
                 console.error('Login error:', error);
-                alert('Fehler beim Anmelden: ' + error.message);
+                
+                // Show specific error message
+                let errorMessage = 'Fehler beim Anmelden: ' + error.message;
+                if (error.message.includes('Invalid master password')) {
+                    errorMessage = 'Ungültiges Master-Passwort.';
+                } else if (error.message.includes('LINK_REQUIRED')) {
+                    errorMessage = 'Verknüpfung erforderlich. Bitte bestätigen Sie mit einem bestehenden Master-Passwort.';
+                } else if (error.message.includes('MIGRATION_CONFIRM_REQUIRED')) {
+                    errorMessage = 'Migration erforderlich. Bitte bestätigen Sie mit einem bestehenden Master-Passwort.';
+                } else if (error.message.includes('SESSION_CREATION_FAILED')) {
+                    errorMessage = 'Fehler beim Erstellen der Sitzung. Bitte versuchen Sie es erneut.';
+                } else if (error.message.includes('Nicht angemeldet')) {
+                    errorMessage = 'Sitzung abgelaufen. Bitte melden Sie sich erneut an.';
+                }
+                
+                alert(errorMessage);
                 // Show login screen again on error
                 document.getElementById('initialLoading').style.display = 'none';
                 document.getElementById('loginScreen').style.display = 'block';

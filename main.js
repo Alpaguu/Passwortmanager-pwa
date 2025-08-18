@@ -8,8 +8,24 @@ const setDataDirectoryEnv = () => {
   try {
     const userDataDir = path.join(app.getPath('userData'), 'data');
     process.env.DATA_DIR = userDataDir;
-  } catch (_) {
-    // Ignore; fallback to server default
+    
+    // Ensure the data directory exists
+    const fs = require('fs');
+    if (!fs.existsSync(userDataDir)) {
+      fs.mkdirSync(userDataDir, { recursive: true });
+    }
+    
+    // Ensure sessions subdirectory exists
+    const sessionsDir = path.join(userDataDir, 'sessions');
+    if (!fs.existsSync(sessionsDir)) {
+      fs.mkdirSync(sessionsDir, { recursive: true });
+    }
+    
+    console.log('Data directory set to:', userDataDir);
+  } catch (error) {
+    console.error('Error setting up data directory:', error);
+    // Fallback to server default
+    process.env.DATA_DIR = path.join(__dirname, 'data');
   }
 };
 
