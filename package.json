@@ -1,6 +1,6 @@
 {
   "name": "password-manager-backend",
-  "version": "1.2.0",
+  "version": "1.7.0",
   "description": "Lokaler Passwort-Manager (Backend + Desktop-App)",
   "author": "",
   "license": "MIT",
@@ -25,6 +25,7 @@
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-session": "^1.18.2",
+    "session-file-store": "1.5.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
