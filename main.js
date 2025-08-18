@@ -10,10 +10,10 @@ const setDataDirectoryEnv = () => {
     const userDataDir = path.join(app.getPath('userData'), 'data');
     process.env.DATA_DIR = userDataDir;
     
-    // Ensure the data directory exists
+    // Ensure the data directory exists with proper permissions
     const fs = require('fs');
     if (!fs.existsSync(userDataDir)) {
-      fs.mkdirSync(userDataDir, { recursive: true });
+      fs.mkdirSync(userDataDir, { recursive: true, mode: 0o755 });
     }
     
     // Ensure sessions subdirectory exists with proper permissions
@@ -22,13 +22,37 @@ const setDataDirectoryEnv = () => {
       fs.mkdirSync(sessionsDir, { recursive: true, mode: 0o755 });
     }
     
+    // Set proper permissions for existing directories
+    try {
+      fs.chmodSync(userDataDir, 0o755);
+      fs.chmodSync(sessionsDir, 0o755);
+    } catch (permError) {
+      console.warn('Could not set permissions on data directories:', permError.message);
+    }
+    
     // Also set SESSION_SECRET for distributed app
     if (!process.env.SESSION_SECRET) {
       process.env.SESSION_SECRET = 'distributed-app-secret-key-' + Date.now();
     }
     
+    // Set additional environment variables for better session handling
+    process.env.ELECTRON = 'true';
+    process.env.NODE_ENV = 'production';
+    
     console.log('Data directory set to:', userDataDir);
     console.log('Sessions directory:', sessionsDir);
+    console.log('Session secret set:', process.env.SESSION_SECRET ? 'Yes' : 'No');
+    
+    // Test write permissions
+    try {
+      const testFile = path.join(sessionsDir, '.test-write');
+      fs.writeFileSync(testFile, 'test');
+      fs.unlinkSync(testFile);
+      console.log('✓ Write permissions OK for sessions directory');
+    } catch (writeError) {
+      console.error('✗ Write permission test failed for sessions directory:', writeError.message);
+      console.error('This may cause session creation issues!');
+    }
   } catch (error) {
     console.error('Error setting up data directory:', error);
     // Fallback to server default

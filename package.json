@@ -1,6 +1,6 @@
 {
   "name": "password-manager-backend",
-  "version": "1.7.0",
+  "version": "1.8.1",
   "description": "Lokaler Passwort-Manager (Backend + Desktop-App)",
   "author": "",
   "license": "MIT",

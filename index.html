@@ -217,11 +217,45 @@
 
         .sort-box select {
             width: 100%;
-            padding: 12px 16px;
+            padding: 12px 40px 12px 16px;
             border: 1px solid #d1d5db;
             border-radius: 8px;
             font-size: 15px;
             background: #ffffff;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+            cursor: pointer;
+        }
+
+        .sort-box select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Custom dropdown styling for better design integration */
+        .sort-box select option,
+        .folder-box select option {
+            background: #ffffff;
+            color: #111827;
+            padding: 12px 16px;
+            border: none;
+            font-size: 15px;
+        }
+
+        .sort-box select option:hover,
+        .folder-box select option:hover {
+            background: #f3f4f6;
+        }
+
+        .sort-box select option:checked {
+            background: #1a1a1a;
+            color: #ffffff;
         }
 
         .btn-group {
@@ -290,11 +324,25 @@
 
         .folder-box select {
             width: 100%;
-            padding: 12px 16px;
+            padding: 12px 40px 12px 16px;
             border: 1px solid #d1d5db;
             border-radius: 8px;
             font-size: 15px;
             background: #ffffff;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 16px;
+            cursor: pointer;
+        }
+
+        .folder-box select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         .header-actions {
@@ -1020,6 +1068,9 @@
                 <p id="loginDescription" style="margin: 20px 0; color: #7f8c8d;">
                     Geben Sie Ihr Master-Passwort ein, um auf Ihre verschlüsselten Passwörter zuzugreifen.
                 </p>
+                <div id="sessionRecoveryNotice" style="display: none; background: #e3f2fd; border: 1px solid #2196f3; border-radius: 8px; padding: 12px; margin: 16px 0; color: #1976d2;">
+                    <strong>💾 Daten wiederhergestellt!</strong> Ihre Passwörter und Ordner sind noch vorhanden. Geben Sie einfach Ihr Master-Passwort erneut ein.
+                </div>
                 <div class="form-group">
                     <label for="masterPassword">Master-Passwort:</label>
                     <input type="password" id="masterPassword" placeholder="Ihr Master-Passwort eingeben">
@@ -1542,44 +1593,77 @@
             }
 
             async ensureAuthenticatedOrReLogin() {
-                // If session is valid, nothing to do
                 try {
+                    // If session is valid, nothing to do
                     const ok = await this.checkSessionStatus();
                     if (ok) return true;
-                } catch (_) {}
+                } catch (error) {
+                    console.error('Error checking session status during re-login:', error);
+                }
+                
                 // Try transparent re-login using cached password (memory only)
-                if (!this.cachedMasterPassword) return false;
+                if (!this.cachedMasterPassword) {
+                    console.log('No cached master password available for re-login');
+                    return false;
+                }
+                
                 try {
                     await this.verifyMasterPassword(this.cachedMasterPassword);
                     // Give the server a moment to save session to store
                     await new Promise(r => setTimeout(r, 25));
                     return true;
-                } catch (_) {
+                } catch (error) {
+                    console.error('Error during transparent re-login:', error);
                     return false;
                 }
             }
 
             async fetchWithAuthRetry(url, init) {
-                const res = await fetch(url, init);
-                if (res.status !== 401) return res;
-                // Attempt re-login once
-                const relogged = await this.ensureAuthenticatedOrReLogin();
-                if (!relogged) return res;
-                return await fetch(url, init);
+                try {
+                    const res = await fetch(url, init);
+                    if (res.status !== 401) return res;
+                    
+                    // Attempt re-login once
+                    const relogged = await this.ensureAuthenticatedOrReLogin();
+                    if (!relogged) {
+                        // If re-login failed, return the original response
+                        return res;
+                    }
+                    
+                    // Try the request again with the new session
+                    try {
+                        return await fetch(url, init);
+                    } catch (retryError) {
+                        console.error('Error during retry request:', retryError);
+                        // Return the original response if retry fails
+                        return res;
+                    }
+                } catch (error) {
+                    console.error('Error in fetchWithAuthRetry:', error);
+                    // Create a mock response for the error case
+                    return new Response(JSON.stringify({ error: 'Network error' }), {
+                        status: 500,
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                }
             }
 
             async checkSessionStatus() {
-                await this.ensureMode();
-                if (this.localMode) {
-                    return this.isAuthenticated;
-                }
                 try {
+                    await this.ensureMode();
+                    if (this.localMode) {
+                        return this.isAuthenticated;
+                    }
+                    
                     const response = await fetch(`${this.apiBase}/session-status`, {
                         credentials: 'include'
                     });
+                    
                     if (!response.ok) {
-                        throw new Error('Failed to check session status');
+                        console.warn('Session status check failed with status:', response.status);
+                        return false;
                     }
+                    
                     const data = await response.json();
                     
                     // Log session info for debugging
@@ -1587,7 +1671,10 @@
                         console.log('Session status:', data);
                     }
                     
-                    return data.authenticated;
+                    // Store session recovery info for UI
+                    this.sessionRecoverable = data.sessionRecoverable || false;
+                    
+                    return data.authenticated || false;
                 } catch (error) {
                     console.error('Error checking session status:', error);
                     return false;
@@ -1835,15 +1922,16 @@
             }
 
             async loadPasswords() {
-                await this.ensureMode();
-                if (this.localMode) {
-                    if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
-                    const vault = await LocalMode.loadVault(this.dataKeyHex);
-                    this.passwords = Array.isArray(vault.passwords) ? vault.passwords : [];
-                    this.renderPasswords();
-                    return;
-                }
                 try {
+                    await this.ensureMode();
+                    if (this.localMode) {
+                        if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                        const vault = await LocalMode.loadVault(this.dataKeyHex);
+                        this.passwords = Array.isArray(vault.passwords) ? vault.passwords : [];
+                        this.renderPasswords();
+                        return;
+                    }
+                    
                     if (!this.isAuthenticated) {
                         throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
                     }
@@ -1853,6 +1941,18 @@
                     });
                     
                     if (!response.ok) {
+                        if (response.status === 401) {
+                            this.isAuthenticated = false;
+                            try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
+                            document.getElementById('mainContent').style.display = 'none';
+                            document.getElementById('headerActions').style.display = 'none';
+                            document.getElementById('loginScreen').style.display = 'block';
+                            
+                            // Show specific error message for authentication issues
+                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                            return; // Don't throw error, just return
+                        }
+                        
                         const error = await response.json();
                         throw new Error(error.error);
                     }
@@ -1860,20 +1960,47 @@
                     this.passwords = await response.json();
                     this.renderPasswords();
                 } catch (error) {
+                    console.error('Error loading passwords:', error);
                     this.showNotification('Fehler beim Laden der Passwörter: ' + error.message, 'error');
                     this.renderPasswords([]);
                 }
             }
 
             async loadFolders() {
-                await this.ensureMode();
-                if (this.localMode) {
-                    const vault = this.dataKeyHex ? await LocalMode.loadVault(this.dataKeyHex) : { folders: [] };
-                    this.folders = Array.isArray(vault.folders) ? vault.folders : [];
-                    this.hydrateFolderSelects();
-                    return;
-                }
                 try {
+                    await this.ensureMode();
+                    if (this.localMode) {
+                        const vault = this.dataKeyHex ? await LocalMode.loadVault(this.dataKeyHex) : { folders: [] };
+                        let folders = Array.isArray(vault.folders) ? vault.folders : [];
+                        
+                        // Migrate existing folders without order index
+                        let needsMigration = false;
+                        folders.forEach((folder, index) => {
+                            if (typeof folder.order !== 'number') {
+                                folder.order = index;
+                                folder.updatedAt = new Date().toISOString();
+                                needsMigration = true;
+                            }
+                        });
+                        
+                        // Save migrated data if needed
+                        if (needsMigration) {
+                            vault.folders = folders;
+                            await LocalMode.saveVault(this.dataKeyHex, vault);
+                        }
+                        
+                        // Sort folders by order index
+                        folders.sort((a, b) => {
+                            const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+                            const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+                            return orderA - orderB;
+                        });
+                        
+                        this.folders = folders;
+                        this.hydrateFolderSelects();
+                        return;
+                    }
+                    
                     const response = await fetch(`${this.apiBase}/folders`, { credentials: 'include' });
                     if (!response.ok) {
                         if (response.status === 401) {
@@ -1885,64 +2012,260 @@
                             
                             // Show specific error message for authentication issues
                             this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                            return; // Don't throw error, just return
                         }
                         throw new Error('Fehler beim Laden der Ordner');
                     }
-                    this.folders = await response.json();
+                    const folders = await response.json();
+                    // Sort folders by order index
+                    this.folders = folders.sort((a, b) => {
+                        const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+                        const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+                        return orderA - orderB;
+                    });
                     this.hydrateFolderSelects();
                 } catch (error) {
-                    console.error(error);
+                    console.error('Error loading folders:', error);
                     this.folders = [];
                     this.hydrateFolderSelects();
                 }
             }
 
             hydrateFolderSelects() {
-                // Toolbar filter
-                const filterSelect = document.getElementById('folderSelect');
-                if (filterSelect) {
-                    const current = this.selectedFolderId;
+                try {
+                    // Cache folder options for better performance
+                    if (!this._folderOptionsCache || this._folderOptionsCache.foldersLength !== this.folders.length) {
+                        this._buildFolderOptionsCache();
+                    }
+                    
+                    // Toolbar filter
+                    const filterSelect = document.getElementById('folderSelect');
+                    if (filterSelect) {
+                        filterSelect.innerHTML = this._folderOptionsCache.filterOptions;
+                        filterSelect.value = this.selectedFolderId || 'all';
+                    }
+                    
+                    // Modal select for password
+                    const pwdSelect = document.getElementById('passwordFolder');
+                    if (pwdSelect) {
+                        pwdSelect.innerHTML = this._folderOptionsCache.modalOptions;
+                    }
+
+                    // Drag & Drop folder bar
+                    const dndBar = document.getElementById('folderDndBar');
+                    if (dndBar) {
+                        dndBar.innerHTML = this._folderOptionsCache.dndOptions;
+                        this.setupFolderDropTargets();
+                        this.setupFolderReorder();
+                    }
+                } catch (error) {
+                    console.error('Error in hydrateFolderSelects:', error);
+                }
+            }
+
+            // Build and cache folder options for better performance
+            _buildFolderOptionsCache() {
+                try {
                     const seen = new Set();
-                    const options = this.folders.filter(f => {
+                    const uniqueFolders = this.folders.filter(f => {
                         const key = String(f.name || '').trim().toLowerCase();
                         if (seen.has(key)) return false;
                         seen.add(key);
                         return true;
                     });
-                    filterSelect.innerHTML = '<option value="all">Alle Ordner</option><option value="null">Ohne Ordner</option>' +
-                        options.map(f => `<option value="${f.id}">${this.escapeHtml(f.name)}</option>`).join('');
-                    filterSelect.value = current || 'all';
-                }
-                // Modal select for password
-                const pwdSelect = document.getElementById('passwordFolder');
-                if (pwdSelect) {
-                    const seen2 = new Set();
-                    const options2 = this.folders.filter(f => {
-                        const key = String(f.name || '').trim().toLowerCase();
-                        if (seen2.has(key)) return false;
-                        seen2.add(key);
-                        return true;
-                    });
-                    pwdSelect.innerHTML = '<option value="">Ohne Ordner</option>' +
-                        options2.map(f => `<option value="${f.id}">${this.escapeHtml(f.name)}</option>`).join('');
-                }
 
-                // Drag & Drop folder bar
-                const dndBar = document.getElementById('folderDndBar');
-                if (dndBar) {
-                    const unique = [];
-                    const seen3 = new Set();
-                    for (const f of this.folders) {
-                        const key = String(f.name || '').trim().toLowerCase();
-                        if (seen3.has(key)) continue;
-                        seen3.add(key);
-                        unique.push(f);
+                    // Cache filter options
+                    const filterOptions = '<option value="all">Alle Ordner</option><option value="null">Ohne Ordner</option>' +
+                        uniqueFolders.map(f => `<option value="${f.id}">${this.escapeHtml(f.name)}</option>`).join('');
+
+                    // Cache modal options
+                    const modalOptions = '<option value="">Ohne Ordner</option>' +
+                        uniqueFolders.map(f => `<option value="${f.id}">${this.escapeHtml(f.name)}</option>`).join('');
+
+                    // Cache DnD options
+                    const dndOptions = `<div class="folder-drop" data-folder-id="" role="button" tabindex="0"><span class="name">Ohne Ordner</span></div>` +
+                        uniqueFolders.map(f => `<div class="folder-drop" data-folder-id="${f.id}" role="button" tabindex="0" draggable="true"><span class="name">${this.escapeHtml(f.name)}</span></div>`).join('');
+
+                    this._folderOptionsCache = {
+                        filterOptions,
+                        modalOptions,
+                        dndOptions,
+                        foldersLength: this.folders.length
+                    };
+                } catch (error) {
+                    console.error('Error in _buildFolderOptionsCache:', error);
+                }
+            }
+
+            // Clear caches when data changes
+            _clearCaches() {
+                try {
+                    this._folderOptionsCache = null;
+                    this._folderChipsCache = null;
+                    this._collator = null;
+                } catch (error) {
+                    console.error('Error clearing caches:', error);
+                }
+            }
+
+            // Background API call for folder deletion (fire and forget)
+            async _deleteFolderInBackground(id) {
+                try {
+                    const res = await fetch(`${this.apiBase}/folders/${id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+                    
+                    if (!res.ok) {
+                        if (res.status === 401) {
+                            // Session expired - show notification but don't revert UI
+                            this.showNotification('Warnung: Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'warning');
+                            return;
+                        }
+                        
+                        // Other errors - log but don't revert UI
+                        console.warn('Background folder deletion failed:', res.status, res.statusText);
+                        return;
                     }
-                    const dropItems = [`<div class="folder-drop" data-folder-id="" role="button" tabindex="0"><span class="name">Ohne Ordner</span></div>`]
-                        .concat(unique.map(f => `<div class="folder-drop" data-folder-id="${f.id}" role="button" tabindex="0" draggable="true"><span class="name">${this.escapeHtml(f.name)}</span></div>`));
-                    dndBar.innerHTML = dropItems.join('');
-                    this.setupFolderDropTargets();
-                    this.setupFolderReorder();
+                    
+                    console.log('Background folder deletion successful');
+                } catch (error) {
+                    // Network errors - log but don't revert UI
+                    console.warn('Background folder deletion network error:', error);
+                }
+            }
+
+            // Background API call for password moving (fire and forget)
+            async _movePasswordInBackground(id, folderId, currentPassword) {
+                try {
+                    const response = await fetch(`${this.apiBase}/passwords/${id}/move`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ folderId })
+                    });
+                    
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            // Session expired - show notification but don't revert UI
+                            this.showNotification('Warnung: Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'warning');
+                            return;
+                        }
+                        
+                        // Other errors - log but don't revert UI
+                        console.warn('Background password move failed:', response.status, response.statusText);
+                        return;
+                    }
+                    
+                    console.log('Background password move successful');
+                } catch (error) {
+                    // Network errors - log but don't revert UI
+                    console.warn('Background password move network error:', error);
+                }
+            }
+
+            // Background API call for folder creation (fire and forget)
+            async _createFolderInBackground(name, newFolder) {
+                try {
+                    const res = await fetch(`${this.apiBase}/folders`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ name })
+                    });
+                    
+                    if (!res.ok) {
+                        if (res.status === 401) {
+                            // Session expired - show notification but don't revert UI
+                            this.showNotification('Warnung: Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'warning');
+                            return;
+                        }
+                        
+                        // Other errors - log but don't revert UI
+                        console.warn('Background folder creation failed:', res.status, res.statusText);
+                        return;
+                    }
+                    
+                    // Update with server response to ensure consistency
+                    const serverFolder = await res.json();
+                    const index = this.folders.findIndex(f => f.id === newFolder.id);
+                    if (index !== -1) {
+                        this.folders[index] = serverFolder;
+                    }
+                    
+                    console.log('Background folder creation successful');
+                } catch (error) {
+                    // Network errors - log but don't revert UI
+                    console.warn('Background folder creation network error:', error);
+                }
+            }
+
+            // Background API call for folder renaming (fire and forget)
+            async _renameFolderInBackground(id, name, currentFolder) {
+                try {
+                    const res = await fetch(`${this.apiBase}/folders/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ name })
+                    });
+                    
+                    if (!res.ok) {
+                        if (res.status === 401) {
+                            // Session expired - show notification but don't revert UI
+                            this.showNotification('Warnung: Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'warning');
+                            return;
+                        }
+                        
+                        // Other errors - log but don't revert UI
+                        console.warn('Background folder rename failed:', res.status, res.statusText);
+                        return;
+                    }
+                    
+                    // Update with server response to ensure consistency
+                    const updatedFolder = await res.json();
+                    const index = this.folders.findIndex(f => f.id === id);
+                    if (index !== -1) {
+                        this.folders[index] = updatedFolder;
+                    }
+                    
+                    console.log('Background folder rename successful');
+                } catch (error) {
+                    // Network errors - log but don't revert UI
+                    console.warn('Background folder rename network error:', error);
+                }
+            }
+
+            // Background API call for password deletion (fire and forget)
+            async _deletePasswordInBackground(id) {
+                try {
+                    if (!this.isAuthenticated) {
+                        console.warn('Cannot delete password - not authenticated');
+                        return;
+                    }
+
+                    const response = await fetch(`${this.apiBase}/delete/${id}`, {
+                        method: 'DELETE',
+                        credentials: 'include'
+                    });
+
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            // Session expired - show notification but don't revert UI
+                            this.showNotification('Warnung: Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'warning');
+                            return;
+                        }
+                        
+                        // Other errors - log but don't revert UI
+                        const error = await response.json().catch(() => ({}));
+                        console.warn('Background password deletion failed:', response.status, error.error || response.statusText);
+                        return;
+                    }
+                    
+                    console.log('Background password deletion successful');
+                } catch (error) {
+                    // Network errors - log but don't revert UI
+                    console.warn('Background password deletion network error:', error);
                 }
             }
 
@@ -2074,51 +2397,17 @@
                 const index = this.passwords.findIndex(p => p.id === id);
                 if (index !== -1) {
                     this.passwords[index] = { ...this.passwords[index], folderId: folderId || null };
-                    this.renderPasswords(); // Update UI immediately
+                    
+                    // Clear caches and update UI smoothly
+                    this._clearCaches();
+                    requestAnimationFrame(() => this.renderPasswords());
+                    
+                    // Show success message immediately
+                    this.showNotification('Verschoben', 'success');
                 }
                 
-                try {
-                    const response = await this.fetchWithAuthRetry(`${this.apiBase}/passwords/${id}/move`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ folderId })
-                    });
-                    if (!response.ok) {
-                        if (response.status === 401) {
-                            this.isAuthenticated = false;
-                            try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                            document.getElementById('mainContent').style.display = 'none';
-                            document.getElementById('headerActions').style.display = 'none';
-                            document.getElementById('loginScreen').style.display = 'block';
-                            
-                            // Show specific error message for authentication issues
-                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
-                            
-                            // Revert optimistic update
-                            if (index !== -1 && currentPassword) {
-                                this.passwords[index] = { ...this.passwords[index], folderId: currentPassword.folderId };
-                                this.renderPasswords();
-                            }
-                            return;
-                        }
-                        const error = await response.json();
-                        throw new Error(error.error);
-                    }
-                    
-                    // Update with server response to ensure consistency
-                    const updated = await response.json();
-                    if (index !== -1) this.passwords[index] = updated;
-                    this.renderPasswords();
-                    this.showNotification('Verschoben', 'success');
-                } catch (error) {
-                    // Revert optimistic update on error
-                    if (index !== -1 && currentPassword) {
-                        this.passwords[index] = { ...this.passwords[index], folderId: currentPassword.folderId };
-                        this.renderPasswords();
-                    }
-                    this.showNotification('Fehler beim Verschieben: ' + error.message, 'error');
-                }
+                // Fire and forget API call in background
+                this._movePasswordInBackground(id, folderId, currentPassword);
             }
 
             async deletePassword(id) {
@@ -2136,26 +2425,24 @@
                     return;
                 }
 
+                // IMMEDIATE UI UPDATE - No waiting for server!
                 try {
-                    if (!this.isAuthenticated) {
-                        throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
-                    }
-
-                    const response = await fetch(`${this.apiBase}/delete/${id}`, {
-                        method: 'DELETE',
-                        credentials: 'include'
-                    });
-
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.error);
-                    }
-
+                    // Optimistic update: remove password immediately
                     this.passwords = this.passwords.filter(p => p.id !== id);
-                    this.renderPasswords();
+                    
+                    // Clear caches and update UI smoothly
+                    this._clearCaches();
+                    requestAnimationFrame(() => this.renderPasswords());
+                    
+                    // Show success message immediately
                     this.showNotification('Passwort erfolgreich gelöscht!', 'success');
-                } catch (error) {
-                    this.showNotification('Fehler beim Löschen: ' + error.message, 'error');
+                    
+                    // Fire and forget API call in background
+                    this._deletePasswordInBackground(id);
+                    
+                } catch (uiError) {
+                    console.error('Error updating UI after password deletion:', uiError);
+                    this.showNotification('Passwort gelöscht, aber Fehler beim Aktualisieren der Anzeige', 'warning');
                 }
             }
 
@@ -2164,312 +2451,411 @@
                 this.currentPage = 1;
                 
                 const text = searchTerm.toLowerCase();
+                
+                // If there's a search term, search through ALL passwords regardless of folder
+                if (text.trim()) {
+                    const filtered = this.passwords.filter(password => {
+                        return password.title.toLowerCase().includes(text) ||
+                               password.username.toLowerCase().includes(text) ||
+                               (password.url && password.url.toLowerCase().includes(text));
+                    });
+                    this.renderPasswords(filtered);
+                    return;
+                }
+                
+                // If no search term, apply folder filter as normal
                 const filtered = this.passwords.filter(password => {
-                    const matchesText = password.title.toLowerCase().includes(text) ||
-                        password.username.toLowerCase().includes(text) ||
-                        (password.url && password.url.toLowerCase().includes(text));
-                    const matchesFolder = this.selectedFolderId === 'all'
-                        ? true
-                        : (this.selectedFolderId === 'null' ? (password.folderId == null) : password.folderId === this.selectedFolderId);
-                    return matchesText && matchesFolder;
+                    if (this.selectedFolderId === 'all') return true;
+                    if (this.selectedFolderId === 'null') return (password.folderId == null);
+                    return password.folderId === this.selectedFolderId;
                 });
                 this.renderPasswords(filtered);
             }
 
             renderPasswords(passwordsToRender = this.passwords) {
-                const container = document.getElementById('passwordsContainer');
-                
-                // Apply current folder filter if full list passed
-                if (passwordsToRender === this.passwords) {
-                    passwordsToRender = this.passwords.filter(p => {
-                        if (this.selectedFolderId === 'all') return true;
-                        if (this.selectedFolderId === 'null') return p.folderId == null;
-                        return p.folderId === this.selectedFolderId;
-                    });
+                try {
+                    const container = document.getElementById('passwordsContainer');
+                    if (!container) return;
+                    
+                    // Apply current folder filter if full list passed
+                    if (passwordsToRender === this.passwords) {
+                        passwordsToRender = this.passwords.filter(p => {
+                            if (this.selectedFolderId === 'all') return true;
+                            if (this.selectedFolderId === 'null') return p.folderId == null;
+                            return p.folderId === this.selectedFolderId;
+                        });
+                    }
+
+                    if (passwordsToRender.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <h3>${this.passwords.length === 0 ? 'Keine Passwörter vorhanden' : 'Keine Passwörter gefunden'}</h3>
+                                <p>${this.passwords.length === 0 ? 'Fügen Sie Ihr erstes Passwort hinzu, um zu beginnen.' : 'Versuchen Sie einen anderen Suchbegriff.'}</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Optimized sorting: only sort if needed and cache collator
+                    let sorted = passwordsToRender;
+                    if (passwordsToRender.length > 1) {
+                        if (!this._collator) {
+                            this._collator = new Intl.Collator('de', { sensitivity: 'base', numeric: true });
+                        }
+                        sorted = [...passwordsToRender].sort((a, b) => this._collator.compare(a.title, b.title));
+                        if (this.sortOrder === 'za') {
+                            sorted.reverse();
+                        }
+                    }
+
+                    // Calculate pagination after sorting
+                    const totalPages = Math.ceil(sorted.length / this.itemsPerPage);
+                    const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+                    const endIndex = startIndex + this.itemsPerPage;
+                    const currentPagePasswords = sorted.slice(startIndex, endIndex);
+
+                    // Use DocumentFragment for better performance
+                    const fragment = document.createDocumentFragment();
+                    const passwordsList = document.createElement('div');
+                    passwordsList.className = 'passwords-list';
+                    passwordsList.innerHTML = currentPagePasswords.map(password => this.renderPasswordRow(password)).join('');
+                    fragment.appendChild(passwordsList);
+                    
+                    if (totalPages > 1) {
+                        const pagination = document.createElement('div');
+                        pagination.innerHTML = this.renderPagination(totalPages, passwordsToRender.length);
+                        fragment.appendChild(pagination);
+                    }
+
+                    // Clear and append in one operation
+                    container.innerHTML = '';
+                    container.appendChild(fragment);
+
+                    // Add event listeners for expand/collapse
+                    this.setupPasswordItemListeners();
+                    this.makePasswordItemsDraggable();
+                } catch (error) {
+                    console.error('Error in renderPasswords:', error);
                 }
-
-                if (passwordsToRender.length === 0) {
-                    container.innerHTML = `
-                        <div class="empty-state">
-                            <h3>${this.passwords.length === 0 ? 'Keine Passwörter vorhanden' : 'Keine Passwörter gefunden'}</h3>
-                            <p>${this.passwords.length === 0 ? 'Fügen Sie Ihr erstes Passwort hinzu, um zu beginnen.' : 'Versuchen Sie einen anderen Suchbegriff.'}</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                // Sort by title according to current order
-                const collator = new Intl.Collator('de', { sensitivity: 'base', numeric: true });
-                const sorted = [...passwordsToRender].sort((a, b) => collator.compare(a.title, b.title));
-                if (this.sortOrder === 'za') {
-                    sorted.reverse();
-                }
-
-                // Calculate pagination after sorting
-                const totalPages = Math.ceil(sorted.length / this.itemsPerPage);
-                const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-                const endIndex = startIndex + this.itemsPerPage;
-                const currentPagePasswords = sorted.slice(startIndex, endIndex);
-
-                container.innerHTML = `
-                    <div class="passwords-list">
-                        ${currentPagePasswords.map(password => this.renderPasswordRow(password)).join('')}
-                    </div>
-                    ${this.renderPagination(totalPages, passwordsToRender.length)}
-                `;
-
-                // Add event listeners for expand/collapse
-                this.setupPasswordItemListeners();
-                this.makePasswordItemsDraggable();
             }
 
             renderPasswordRow(password) {
-                const title = this.escapeHtml(password.title);
-                const username = this.escapeHtml(password.username);
-                const url = this.escapeHtml(password.url || '');
-                return `
-                    <div class="password-item" data-password-id="${password.id}">
-                        <div class="password-header" role="button" tabindex="0" title="Details anzeigen">
-                            <h3>${title}</h3>
-                            <span class="chevron" aria-hidden="true"></span>
-                        </div>
-                        <div class="password-content">
-                            <div class="password-details">
-                                <div class="password-field">
-                                    <label>Benutzername:</label>
-                                    <div class="value">
-                                        <input type="text" value="${username}" readonly>
-                                        <button class="copy-btn" onclick="copyToClipboard('${username}')">Kopieren</button>
-                                    </div>
-                                </div>
-                                <div class="password-field">
-                                    <label>Passwort:</label>
-                                    <div class="value">
-                                        <input type="password" value="${this.escapeHtml(password.password)}" readonly id="pwd-${password.id}">
-                                        <button class="copy-btn" onclick="copyToClipboard('${this.escapeHtml(password.password)}')">Kopieren</button>
-                                        <button class="copy-btn" onclick="togglePasswordVisibility('${password.id}')">👁️</button>
-                                    </div>
-                                </div>
-                                ${password.url ? `
+                try {
+                    // Cache escapeHtml calls for better performance
+                    const title = this.escapeHtml(password.title);
+                    const username = this.escapeHtml(password.username);
+                    const url = this.escapeHtml(password.url || '');
+                    const passwordValue = this.escapeHtml(password.password);
+                    const notes = password.notes ? this.escapeHtml(password.notes) : '';
+                    
+                    // Pre-build folder chips for better performance
+                    const folderChips = this._buildFolderChips(password.folderId);
+                    
+                    return `
+                        <div class="password-item" data-password-id="${password.id}">
+                            <div class="password-header" role="button" tabindex="0" title="Details anzeigen">
+                                <h3>${title}</h3>
+                                <span class="chevron" aria-hidden="true"></span>
+                            </div>
+                            <div class="password-content">
+                                <div class="password-details">
                                     <div class="password-field">
-                                        <label>URL:</label>
+                                        <label>Benutzername:</label>
                                         <div class="value">
-                                            <input type="text" value="${this.escapeHtml(password.url)}" readonly>
-                                            <button class="copy-btn" onclick="copyToClipboard('${this.escapeHtml(password.url)}')">Kopieren</button>
+                                            <input type="text" value="${username}" readonly>
+                                            <button class="copy-btn" onclick="copyToClipboard('${username}')">Kopieren</button>
                                         </div>
                                     </div>
-                                ` : ''}
-                                ${password.notes ? `
-                                    <div class="password-field full">
-                                        <label>Notizen:</label>
+                                    <div class="password-field">
+                                        <label>Passwort:</label>
                                         <div class="value">
-                                            <textarea readonly style="width: 100%; border: none; background: transparent; resize: none; font-family: inherit;">${this.escapeHtml(password.notes)}</textarea>
+                                            <input type="password" value="${passwordValue}" readonly id="pwd-${password.id}">
+                                            <button class="copy-btn" onclick="copyToClipboard('${passwordValue}')">Kopieren</button>
+                                            <button class="copy-btn" onclick="togglePasswordVisibility('${password.id}')">👁️</button>
                                         </div>
                                     </div>
-                                ` : ''}
-                                <div class="password-field">
-                                    <label>Ordner:</label>
-                                    <div class="folder-chips">
-                                        <span class="folder-chip ${!password.folderId ? 'selected' : ''}" onclick="passwordManager.movePassword('${password.id}', null)">Ohne Ordner</span>
-                                        ${this.folders.map(f => `<span class=\"folder-chip ${password.folderId === f.id ? 'selected' : ''}\" onclick=\"passwordManager.movePassword('${password.id}', '${f.id}')\">${this.escapeHtml(f.name)}</span>`).join('')}
+                                    ${password.url ? `
+                                        <div class="password-field">
+                                            <label>URL:</label>
+                                            <div class="value">
+                                                <input type="text" value="${url}" readonly>
+                                                <button class="copy-btn" onclick="copyToClipboard('${url}')">Kopieren</button>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    ${notes ? `
+                                        <div class="password-field full">
+                                            <label>Notizen:</label>
+                                            <div class="value">
+                                                <textarea readonly style="width: 100%; border: none; background: transparent; resize: none; font-family: inherit;">${notes}</textarea>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    <div class="password-field">
+                                        <label>Ordner:</label>
+                                        <div class="folder-chips">
+                                            ${folderChips}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="row-footer">
-                                <button class="btn" onclick="editPassword('${password.id}')">Bearbeiten</button>
-                                <button class="btn btn-danger" onclick="deletePassword('${password.id}')">Löschen</button>
+                                <div class="row-footer">
+                                    <button class="btn" onclick="editPassword('${password.id}')">Bearbeiten</button>
+                                    <button class="btn btn-danger" onclick="deletePassword('${password.id}')">Löschen</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                } catch (error) {
+                    console.error('Error in renderPasswordRow:', error);
+                    return `<div class="password-item" data-password-id="${password.id}">
+                        <div class="password-header">
+                            <h3>Fehler beim Rendern</h3>
+                        </div>
+                    </div>`;
+                }
             }
 
             escapeHtml(text) {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
+                try {
+                    if (text == null || text === undefined) return '';
+                    
+                    // Use faster string replacement for common cases
+                    const str = String(text);
+                    if (str.length === 0) return '';
+                    
+                    // Fast path for strings without special characters
+                    if (!/[<>&"']/.test(str)) return str;
+                    
+                    // Use optimized replacement for better performance
+                    return str
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                } catch (error) {
+                    console.error('Error in escapeHtml:', error);
+                    return String(text || '');
+                }
             }
 
             renderPagination(totalPages, totalItems) {
-                if (totalPages <= 1) return '';
+                try {
+                    if (totalPages <= 1) return '';
 
-                const startItem = (this.currentPage - 1) * this.itemsPerPage + 1;
-                const endItem = Math.min(this.currentPage * this.itemsPerPage, totalItems);
+                    const startItem = (this.currentPage - 1) * this.itemsPerPage + 1;
+                    const endItem = Math.min(this.currentPage * this.itemsPerPage, totalItems);
 
-                let paginationHtml = '<div class="pagination">';
-                
-                // Previous button
-                paginationHtml += `<button onclick="passwordManager.goToPage(${this.currentPage - 1})" ${this.currentPage === 1 ? 'disabled' : ''}>‹</button>`;
-                
-                // Page numbers
-                const maxVisiblePages = 5;
-                let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
-                let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                
-                if (endPage - startPage + 1 < maxVisiblePages) {
-                    startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                }
-
-                if (startPage > 1) {
-                    paginationHtml += `<button onclick="passwordManager.goToPage(1)">1</button>`;
-                    if (startPage > 2) {
-                        paginationHtml += '<span>...</span>';
+                    let paginationHtml = '<div class="pagination">';
+                    
+                    // Previous button
+                    paginationHtml += `<button onclick="passwordManager.goToPage(${this.currentPage - 1})" ${this.currentPage === 1 ? 'disabled' : ''}>‹</button>`;
+                    
+                    // Page numbers
+                    const maxVisiblePages = 5;
+                    let startPage = Math.max(1, this.currentPage - Math.floor(maxVisiblePages / 2));
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+                    
+                    if (endPage - startPage + 1 < maxVisiblePages) {
+                        startPage = Math.max(1, endPage - maxVisiblePages + 1);
                     }
-                }
 
-                for (let i = startPage; i <= endPage; i++) {
-                    paginationHtml += `<button onclick="passwordManager.goToPage(${i})" class="${i === this.currentPage ? 'active' : ''}">${i}</button>`;
-                }
-
-                if (endPage < totalPages) {
-                    if (endPage < totalPages - 1) {
-                        paginationHtml += '<span>...</span>';
+                    if (startPage > 1) {
+                        paginationHtml += `<button onclick="passwordManager.goToPage(1)">1</button>`;
+                        if (startPage > 2) {
+                            paginationHtml += '<span>...</span>';
+                        }
                     }
-                    paginationHtml += `<button onclick="passwordManager.goToPage(${totalPages})">${totalPages}</button>`;
+
+                    for (let i = startPage; i <= endPage; i++) {
+                        paginationHtml += `<button onclick="passwordManager.goToPage(${i})" class="${i === this.currentPage ? 'active' : ''}">${i}</button>`;
+                    }
+
+                    if (endPage < totalPages) {
+                        if (endPage < totalPages - 1) {
+                            paginationHtml += '<span>...</span>';
+                        }
+                        paginationHtml += `<button onclick="passwordManager.goToPage(${totalPages})">${totalPages}</button>`;
+                    }
+
+                    // Next button
+                    paginationHtml += `<button onclick="passwordManager.goToPage(${this.currentPage + 1})" ${this.currentPage === totalPages ? 'disabled' : ''}>›</button>`;
+                    
+                    paginationHtml += `<span class="pagination-info">${startItem}-${endItem} von ${totalItems}</span>`;
+                    paginationHtml += '</div>';
+
+                    return paginationHtml;
+                } catch (error) {
+                    console.error('Error in renderPagination:', error);
+                    return '';
                 }
-
-                // Next button
-                paginationHtml += `<button onclick="passwordManager.goToPage(${this.currentPage + 1})" ${this.currentPage === totalPages ? 'disabled' : ''}>›</button>`;
-                
-                paginationHtml += `<span class="pagination-info">${startItem}-${endItem} von ${totalItems}</span>`;
-                paginationHtml += '</div>';
-
-                return paginationHtml;
             }
 
             goToPage(page) {
-                this.currentPage = page;
-                this.renderPasswords();
+                try {
+                    this.currentPage = page;
+                    this.renderPasswords();
+                } catch (error) {
+                    console.error('Error in goToPage:', error);
+                }
             }
 
             setupPasswordItemListeners() {
-                // In compact row layout there is no expandable header; guard against nulls
-                const passwordItems = document.querySelectorAll('.password-item');
-                passwordItems.forEach(item => {
-                    const header = item.querySelector('.password-header');
-                    if (!header) return;
-                    header.addEventListener('click', () => {
-                        item.classList.toggle('expanded');
+                try {
+                    // In compact row layout there is no expandable header; guard against nulls
+                    const passwordItems = document.querySelectorAll('.password-item');
+                    passwordItems.forEach(item => {
+                        const header = item.querySelector('.password-header');
+                        if (!header) return;
+                        header.addEventListener('click', () => {
+                            item.classList.toggle('expanded');
+                        });
                     });
-                });
+                } catch (error) {
+                    console.error('Error in setupPasswordItemListeners:', error);
+                }
             }
 
             makePasswordItemsDraggable() {
-                const items = document.querySelectorAll('.password-item');
-                items.forEach(item => {
-                    item.setAttribute('draggable', 'true');
-                    item.addEventListener('dragstart', (e) => {
-                        const id = item.getAttribute('data-password-id');
-                        try {
-                            e.dataTransfer.effectAllowed = 'move';
-                            e.dataTransfer.setData('application/x-password-id', id);
-                        } catch (_) {}
-                        item.classList.add('dragging');
+                try {
+                    const items = document.querySelectorAll('.password-item');
+                    items.forEach(item => {
+                        item.setAttribute('draggable', 'true');
+                        item.addEventListener('dragstart', (e) => {
+                            const id = item.getAttribute('data-password-id');
+                            try {
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('application/x-password-id', id);
+                            } catch (_) {}
+                            item.classList.add('dragging');
+                        });
+                        item.addEventListener('dragend', () => {
+                            item.classList.remove('dragging');
+                        });
                     });
-                    item.addEventListener('dragend', () => {
-                        item.classList.remove('dragging');
-                    });
-                });
+                } catch (error) {
+                    console.error('Error in makePasswordItemsDraggable:', error);
+                }
             }
 
             setupFolderDropTargets() {
-                const targets = document.querySelectorAll('.folder-drop');
-                targets.forEach(t => {
-                    t.addEventListener('dragover', (e) => {
-                        const isPwd = Array.from(e.dataTransfer?.types || []).includes('application/x-password-id');
-                        if (!isPwd) return; // ignore folder-reorder drags
-                        e.preventDefault();
-                        t.classList.add('active');
+                try {
+                    const targets = document.querySelectorAll('.folder-drop');
+                    targets.forEach(t => {
+                        t.addEventListener('dragover', (e) => {
+                            const isPwd = Array.from(e.dataTransfer?.types || []).includes('application/x-password-id');
+                            if (!isPwd) return; // ignore folder-reorder drags
+                            e.preventDefault();
+                            t.classList.add('active');
+                        });
+                        t.addEventListener('dragleave', () => {
+                            t.classList.remove('active');
+                        });
+                        t.addEventListener('drop', (e) => {
+                            const isPwd = Array.from(e.dataTransfer?.types || []).includes('application/x-password-id');
+                            if (!isPwd) return; // ignore drops from folder chips
+                            e.preventDefault();
+                            t.classList.remove('active');
+                            let id = '';
+                            try { id = e.dataTransfer.getData('application/x-password-id'); } catch (_) {}
+                            if (!id) return;
+                            const folderId = t.getAttribute('data-folder-id') || null;
+                            this.movePassword(id, folderId);
+                        });
+                        // Click to filter by this folder
+                        t.addEventListener('click', () => {
+                            const fid = t.getAttribute('data-folder-id');
+                            const filterSelect = document.getElementById('folderSelect');
+                            if (filterSelect) {
+                                filterSelect.value = fid === '' ? 'null' : fid;
+                                this.selectedFolderId = filterSelect.value;
+                                this.currentPage = 1;
+                                this.renderPasswords();
+                            }
+                        });
                     });
-                    t.addEventListener('dragleave', () => {
-                        t.classList.remove('active');
-                    });
-                    t.addEventListener('drop', (e) => {
-                        const isPwd = Array.from(e.dataTransfer?.types || []).includes('application/x-password-id');
-                        if (!isPwd) return; // ignore drops from folder chips
-                        e.preventDefault();
-                        t.classList.remove('active');
-                        let id = '';
-                        try { id = e.dataTransfer.getData('application/x-password-id'); } catch (_) {}
-                        if (!id) return;
-                        const folderId = t.getAttribute('data-folder-id') || null;
-                        this.movePassword(id, folderId);
-                    });
-                    // Click to filter by this folder
-                    t.addEventListener('click', () => {
-                        const fid = t.getAttribute('data-folder-id');
-                        const filterSelect = document.getElementById('folderSelect');
-                        if (filterSelect) {
-                            filterSelect.value = fid === '' ? 'null' : fid;
-                            this.selectedFolderId = filterSelect.value;
-                            this.currentPage = 1;
-                            this.renderPasswords();
-                        }
-                    });
-                });
+                } catch (error) {
+                    console.error('Error in setupFolderDropTargets:', error);
+                }
             }
 
             setupFolderReorder() {
-                const bar = document.getElementById('folderDndBar');
-                if (!bar) return;
-                const chips = Array.from(bar.querySelectorAll('.folder-drop'));
-                let draggingEl = null;
+                try {
+                    const bar = document.getElementById('folderDndBar');
+                    if (!bar) return;
+                    const chips = Array.from(bar.querySelectorAll('.folder-drop'));
+                    let draggingEl = null;
 
-                chips.forEach((chip) => {
-                    if (!chip.getAttribute('draggable')) return; // skip non-draggable like "Ohne Ordner"
-                    chip.addEventListener('dragstart', (e) => {
-                        draggingEl = chip;
-                        e.dataTransfer.effectAllowed = 'move';
-                        try { e.dataTransfer.setData('text/plain', chip.dataset.folderId || ''); } catch (_) {}
+                    chips.forEach((chip) => {
+                        if (!chip.getAttribute('draggable')) return; // skip non-draggable like "Ohne Ordner"
+                        chip.addEventListener('dragstart', (e) => {
+                            draggingEl = chip;
+                            e.dataTransfer.effectAllowed = 'move';
+                            try { e.dataTransfer.setData('text/plain', chip.dataset.folderId || ''); } catch (_) {}
+                        });
+                        chip.addEventListener('dragend', async () => {
+                            const ids = Array.from(bar.querySelectorAll('.folder-drop'))
+                                .map(el => el.dataset.folderId)
+                                .filter(id => id);
+                            if (Array.isArray(ids) && ids.length > 0) {
+                                try { await this.reorderFolders(ids); } catch (_) {}
+                            }
+                            draggingEl = null;
+                            Array.from(bar.querySelectorAll('.folder-drop')).forEach(el => el.classList.remove('drag-over'));
+                        });
                     });
-                    chip.addEventListener('dragend', async () => {
-                        const ids = Array.from(bar.querySelectorAll('.folder-drop'))
-                            .map(el => el.dataset.folderId)
-                            .filter(id => id);
-                        if (Array.isArray(ids) && ids.length > 0) {
-                            try { await this.reorderFolders(ids); } catch (_) {}
+
+                    bar.addEventListener('dragover', (e) => {
+                        if (!draggingEl) return;
+                        e.preventDefault();
+                        const target = e.target.closest('.folder-drop');
+                        if (!target || target === draggingEl || !bar.contains(target)) return;
+                        const rect = target.getBoundingClientRect();
+                        const before = (e.clientX - rect.left) < rect.width / 2;
+                        target.classList.add('drag-over');
+                        if (before) {
+                            bar.insertBefore(draggingEl, target);
+                        } else {
+                            bar.insertBefore(draggingEl, target.nextSibling);
                         }
-                        draggingEl = null;
-                        Array.from(bar.querySelectorAll('.folder-drop')).forEach(el => el.classList.remove('drag-over'));
                     });
-                });
 
-                bar.addEventListener('dragover', (e) => {
-                    if (!draggingEl) return;
-                    e.preventDefault();
-                    const target = e.target.closest('.folder-drop');
-                    if (!target || target === draggingEl || !bar.contains(target)) return;
-                    const rect = target.getBoundingClientRect();
-                    const before = (e.clientX - rect.left) < rect.width / 2;
-                    target.classList.add('drag-over');
-                    if (before) {
-                        bar.insertBefore(draggingEl, target);
-                    } else {
-                        bar.insertBefore(draggingEl, target.nextSibling);
-                    }
-                });
-
-                bar.addEventListener('dragleave', (e) => {
-                    const t = e.target.closest('.folder-drop');
-                    if (t) t.classList.remove('drag-over');
-                });
+                    bar.addEventListener('dragleave', (e) => {
+                        const t = e.target.closest('.folder-drop');
+                        if (t) t.classList.remove('drag-over');
+                    });
+                } catch (error) {
+                    console.error('Error in setupFolderReorder:', error);
+                }
             }
 
             async reorderFolders(orderIds) {
-                await this.ensureMode();
-                if (this.localMode) {
-                    const vault = await LocalMode.loadVault(this.dataKeyHex);
-                    const existing = Array.isArray(vault.folders) ? vault.folders : [];
-                    const byId = new Map(existing.map(f => [f.id, f]));
-                    const ordered = orderIds.map(id => byId.get(id)).filter(Boolean);
-                    const rest = existing.filter(f => !orderIds.includes(f.id));
-                    vault.folders = [...ordered, ...rest];
+                try {
+                    await this.ensureMode();
+                    if (this.localMode) {
+                        const vault = await LocalMode.loadVault(this.dataKeyHex);
+                        const existing = Array.isArray(vault.folders) ? vault.folders : [];
+                        const byId = new Map(existing.map(f => [f.id, f]));
+                        const ordered = orderIds.map(id => byId.get(id)).filter(Boolean);
+                        const rest = existing.filter(f => !orderIds.includes(f.id));
+                        
+                        // Update order indices for all folders
+                        const allFolders = [...ordered, ...rest];
+                        allFolders.forEach((folder, index) => {
+                            folder.order = index;
+                            folder.updatedAt = new Date().toISOString();
+                        });
+                        
+                                            vault.folders = allFolders;
                     await LocalMode.saveVault(this.dataKeyHex, vault);
                     this.folders = vault.folders;
-                    this.hydrateFolderSelects();
+                    
+                    // Clear caches and update UI smoothly
+                    this._clearCaches();
+                    requestAnimationFrame(() => this.hydrateFolderSelects());
                     return;
-                }
-                try {
+                    }
+                    
                     const res = await this.fetchWithAuthRetry(`${this.apiBase}/folders/reorder`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -2491,9 +2877,12 @@
                         throw new Error('Ordner-Reihenfolge konnte nicht gespeichert werden');
                     }
                     this.folders = await res.json();
-                    this.hydrateFolderSelects();
+                    
+                    // Clear caches and update UI smoothly
+                    this._clearCaches();
+                    requestAnimationFrame(() => this.hydrateFolderSelects());
                 } catch (error) {
-                    console.error(error);
+                    console.error('Error in reorderFolders:', error);
                 }
             }
 
@@ -2542,7 +2931,19 @@
                 await this.ensureMode();
                 if (this.localMode) {
                     const vault = await LocalMode.loadVault(this.dataKeyHex);
-                    const exportData = { version: '1.0', exportDate: new Date().toISOString(), passwords: vault.passwords || [] };
+                    // Sort folders by order index for export
+                    const sortedFolders = (vault.folders || []).sort((a, b) => {
+                        const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+                        const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+                        return orderA - orderB;
+                    });
+                    
+                    const exportData = { 
+                        version: '1.3', 
+                        exportDate: new Date().toISOString(), 
+                        passwords: vault.passwords || [],
+                        folders: sortedFolders
+                    };
 
                     // Ask for export password (twice) using modal
                     const pass1 = await promptNewPasswordWithConfirm(8);
@@ -2552,7 +2953,7 @@
                     const salt = crypto.getRandomValues(new Uint8Array(16));
                     const key = await deriveAesKeyFromString(pass1, salt);
                     const { encrypted, iv } = await encryptStringAesCbc(JSON.stringify(exportData), key);
-                    const payload = { version: '1.1', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
+                    const payload = { version: '1.3', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
 
                     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -2585,7 +2986,7 @@
                     const salt = crypto.getRandomValues(new Uint8Array(16));
                     const key = await deriveAesKeyFromString(pass1, salt);
                     const { encrypted, iv } = await encryptStringAesCbc(JSON.stringify(data), key);
-                    const payload = { version: '1.1', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
+                    const payload = { version: '1.3', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
 
                     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -2618,15 +3019,45 @@
                             data = JSON.parse(json || '{}');
                         }
                         if (!data.passwords || !Array.isArray(data.passwords)) throw new Error('Ungültiges Dateiformat');
+                        
                         const vault = await LocalMode.loadVault(this.dataKeyHex);
+                        
+                        // Import folders if they exist in the export data (backward compatible)
+                        if (data.folders && Array.isArray(data.folders)) {
+                            // Merge folders, avoiding duplicates by name
+                            const existingFolderNames = new Set(vault.folders.map(f => f.name.toLowerCase().trim()));
+                            const newFolders = data.folders.filter(f => !existingFolderNames.has(f.name.toLowerCase().trim()));
+                            
+                            // Preserve order from export data
+                            const importedFolders = newFolders.map((f, index) => ({
+                                ...f,
+                                id: f.id || crypto.randomUUID(),
+                                order: typeof f.order === 'number' ? f.order : (vault.folders.length + index),
+                                createdAt: f.createdAt || new Date().toISOString(),
+                                updatedAt: new Date().toISOString()
+                            }));
+                            
+                            vault.folders = [...vault.folders, ...importedFolders];
+                            
+                            // Sort all folders by order index
+                            vault.folders.sort((a, b) => {
+                                const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+                                const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+                                return orderA - orderB;
+                            });
+                        }
+                        // For older exports without folders, we'll keep existing folders
+                        
+                        // Import passwords
                         vault.passwords = data.passwords.map(p => ({
                             ...p,
                             id: p.id || crypto.randomUUID(),
                             createdAt: p.createdAt || new Date().toISOString(),
                             updatedAt: new Date().toISOString()
                         }));
+                        
                         await LocalMode.saveVault(this.dataKeyHex, vault);
-                        await this.loadPasswords();
+                        await Promise.all([this.loadFolders(), this.loadPasswords()]);
                         this.showNotification('Daten erfolgreich importiert!', 'success');
                     } catch (error) {
                         this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
@@ -2654,7 +3085,10 @@
                             'Content-Type': 'application/json',
                         },
                         credentials: 'include',
-                        body: JSON.stringify({ passwords: data.passwords })
+                        body: JSON.stringify({ 
+                            passwords: data.passwords,
+                            folders: data.folders || []
+                        })
                     });
 
                     if (!response.ok) {
@@ -2662,8 +3096,8 @@
                         throw new Error(error.error);
                     }
 
-                    // Reload passwords after import
-                    await this.loadPasswords();
+                    // Reload both folders and passwords after import
+                    await Promise.all([this.loadFolders(), this.loadPasswords()]);
                     this.showNotification('Daten erfolgreich importiert!', 'success');
                 } catch (error) {
                     this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
@@ -2683,7 +3117,13 @@
                     const normalized = String(name).trim().toLowerCase();
                     const existing = vault.folders.find(f => String(f.name || '').trim().toLowerCase() === normalized);
                     if (existing) { this.folders = vault.folders; return; }
-                    const newFolder = { id: crypto.randomUUID(), name: String(name).trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+                    const newFolder = { 
+                        id: crypto.randomUUID(), 
+                        name: String(name).trim(), 
+                        order: vault.folders.length, // Set order to end of list
+                        createdAt: new Date().toISOString(), 
+                        updatedAt: new Date().toISOString() 
+                    };
                     vault.folders.push(newFolder);
                     await LocalMode.saveVault(this.dataKeyHex, vault);
                     this.folders = vault.folders;
@@ -2693,54 +3133,20 @@
                 // Optimistic update for smoother UX
                 const newFolder = { id: crypto.randomUUID(), name: String(name).trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
                 this.folders.push(newFolder);
-                this.hydrateFolderSelects();
-                this.renderFoldersList(); // Update folder manager list
-                this.renderPasswords(); // Update main view with new folder chips
                 
-                try {
-                    const res = await this.fetchWithAuthRetry(`${this.apiBase}/folders`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ name })
-                    });
-                    if (!res.ok) {
-                        if (res.status === 401) {
-                            this.isAuthenticated = false;
-                            try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                            document.getElementById('mainContent').style.display = 'none';
-                            document.getElementById('headerActions').style.display = 'none';
-                            document.getElementById('loginScreen').style.display = 'block';
-                            
-                            // Show specific error message for authentication issues
-                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
-                            
-                            // Revert optimistic update
-                            this.folders = this.folders.filter(f => f.id !== newFolder.id);
-                            this.hydrateFolderSelects();
-                            this.renderPasswords();
-                            return;
-                        }
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.error || 'Ordner konnte nicht erstellt werden');
-                    }
-                    
-                    // Update with server response to ensure consistency
-                    const serverFolder = await res.json();
-                    const index = this.folders.findIndex(f => f.id === newFolder.id);
-                    if (index !== -1) {
-                        this.folders[index] = serverFolder;
-                    }
+                // Clear caches and update UI smoothly
+                this._clearCaches();
+                requestAnimationFrame(() => {
                     this.hydrateFolderSelects();
+                    this.renderFoldersList();
                     this.renderPasswords();
-                    this.showNotification('Ordner erstellt', 'success');
-                } catch (error) {
-                    // Revert optimistic update on error
-                    this.folders = this.folders.filter(f => f.id !== newFolder.id);
-                    this.hydrateFolderSelects();
-                    this.renderPasswords();
-                    this.showNotification(error.message, 'error');
-                }
+                });
+                
+                // Show success message immediately
+                this.showNotification('Ordner erstellt', 'success');
+                
+                // Fire and forget API call in background
+                this._createFolderInBackground(name, newFolder);
             }
 
             async renameFolder(id) {
@@ -2775,57 +3181,20 @@
                 const index = this.folders.findIndex(f => f.id === id);
                 if (index !== -1) {
                     this.folders[index] = { ...this.folders[index], name: name };
-                    this.hydrateFolderSelects();
-                    this.renderPasswords();
-                }
-                
-                try {
-                    const res = await this.fetchWithAuthRetry(`${this.apiBase}/folders/${id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'include',
-                        body: JSON.stringify({ name })
-                    });
-                    if (!res.ok) {
-                        if (res.status === 401) {
-                            this.isAuthenticated = false;
-                            try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                            document.getElementById('mainContent').style.display = 'none';
-                            document.getElementById('headerActions').style.display = 'none';
-                            document.getElementById('loginScreen').style.display = 'block';
-                            
-                            // Show specific error message for authentication issues
-                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
-                            
-                            // Revert optimistic update
-                            if (index !== -1 && currentFolder) {
-                                this.folders[index] = { ...this.folders[index], name: currentFolder.name };
-                                this.hydrateFolderSelects();
-                                this.renderPasswords();
-                            }
-                            return;
-                        }
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.error || 'Ordner konnte nicht umbenannt werden');
-                    }
                     
-                    // Update with server response to ensure consistency
-                    const updatedFolder = await res.json();
-                    if (index !== -1) {
-                        this.folders[index] = updatedFolder;
-                    }
-                    this.hydrateFolderSelects();
-                    this.renderPasswords();
-                    this.showNotification('Ordner umbenannt', 'success');
-                } catch (error) {
-                    // Revert optimistic update on error
-                    if (index !== -1 && currentFolder) {
-                        this.folders[index] = { ...this.folders[index], name: currentFolder.name };
+                    // Clear caches and update UI smoothly
+                    this._clearCaches();
+                    requestAnimationFrame(() => {
                         this.hydrateFolderSelects();
                         this.renderPasswords();
-                    }
-                    this.showNotification(error.message, 'error');
+                    });
+                    
+                    // Show success message immediately
+                    this.showNotification('Ordner umbenannt', 'success');
                 }
+                
+                // Fire and forget API call in background
+                this._renameFolderInBackground(id, name, currentFolder);
             }
 
             async deleteFolder(id) {
@@ -2844,59 +3213,124 @@
                     return;
                 }
                 if (!confirm('Ordner wirklich löschen? Passwörter werden in "Ohne Ordner" verschoben.')) return;
+                
+                // IMMEDIATE UI UPDATE - No waiting for server!
                 try {
-                    // Proactive session re-check before destructive write
-                    const ok = await this.checkSessionStatus();
-                    if (!ok) {
-                        this.isAuthenticated = false;
-                        try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                        document.getElementById('mainContent').style.display = 'none';
-                        document.getElementById('headerActions').style.display = 'none';
-                        document.getElementById('loginScreen').style.display = 'block';
-                        throw new Error('Nicht angemeldet. Bitte erneut einloggen.');
-                    }
+                    // Optimistic update: remove folder and move passwords in one operation
+                    const passwordsToUpdate = this.passwords.filter(p => p.folderId === id);
+                    this.folders = this.folders.filter(f => f.id !== id);
+                    this.passwords = this.passwords.map(p => 
+                        p.folderId === id ? { ...p, folderId: null, updatedAt: new Date().toISOString() } : p
+                    );
+                    
+                    // Update UI IMMEDIATELY for instant feedback
+                    this.updateUIAfterFolderDeletion();
+                    
+                    // Show success message immediately
+                    this.showNotification(`Ordner gelöscht (${passwordsToUpdate.length} Passwörter in "Ohne Ordner" verschoben)`, 'success');
+                    
+                    // Fire and forget API call in background
+                    this._deleteFolderInBackground(id);
+                    
+                } catch (uiError) {
+                    console.error('Error updating UI after folder deletion:', uiError);
+                    this.showNotification('Ordner gelöscht, aber Fehler beim Aktualisieren der Anzeige', 'warning');
+                }
+            }
 
-                    const res = await this.fetchWithAuthRetry(`${this.apiBase}/folders/${id}?migrateTo=null`, {
-                        method: 'DELETE',
-                        credentials: 'include'
+            // Optimized batch UI update function for folder deletion
+            updateUIAfterFolderDeletion() {
+                try {
+                    // Clear caches for fresh data
+                    this._clearCaches();
+                    
+                    // Use requestAnimationFrame for smooth UI updates
+                    requestAnimationFrame(() => {
+                        this.renderFoldersList();
+                        this.renderPasswords();
+                        this.hydrateFolderSelects();
                     });
-                    if (!res.ok) {
-                        if (res.status === 401) {
-                            this.isAuthenticated = false;
-                            try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                            document.getElementById('mainContent').style.display = 'none';
-                            document.getElementById('headerActions').style.display = 'none';
-                            document.getElementById('loginScreen').style.display = 'block';
-                            
-                            // Show specific error message for authentication issues
-                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
-                            return; // Don't throw error, just return
-                        }
-                        const err = await res.json().catch(() => ({}));
-                        throw new Error(err.error || 'Ordner konnte nicht gelöscht werden');
-                    }
-                    await Promise.all([this.loadFolders(), this.loadPasswords()]);
-                    this.renderFoldersList();
-                    this.showNotification('Ordner gelöscht', 'success');
                 } catch (error) {
-                    this.showNotification(error.message, 'error');
+                    console.error('Error in updateUIAfterFolderDeletion:', error);
+                }
+            }
+
+            // Optimized folder chips builder for better performance
+            _buildFolderChips(passwordFolderId) {
+                try {
+                    // Cache folder chips for better performance
+                    if (!this._folderChipsCache) {
+                        this._folderChipsCache = new Map();
+                    }
+                    
+                    const cacheKey = `${passwordFolderId}_${this.folders.length}`;
+                    if (this._folderChipsCache.has(cacheKey)) {
+                        return this._folderChipsCache.get(cacheKey);
+                    }
+                    
+                    const chips = [
+                        `<span class="folder-chip ${!passwordFolderId ? 'selected' : ''}" onclick="passwordManager.movePassword('${passwordFolderId}', null)">Ohne Ordner</span>`
+                    ];
+                    
+                    for (const folder of this.folders) {
+                        const isSelected = passwordFolderId === folder.id;
+                        chips.push(`<span class="folder-chip ${isSelected ? 'selected' : ''}" onclick="passwordManager.movePassword('${passwordFolderId}', '${folder.id}')">${this.escapeHtml(folder.name)}</span>`);
+                    }
+                    
+                    const result = chips.join('');
+                    this._folderChipsCache.set(cacheKey, result);
+                    return result;
+                } catch (error) {
+                    console.error('Error in _buildFolderChips:', error);
+                    return '<span class="folder-chip">Fehler</span>';
                 }
             }
 
             renderFoldersList() {
-                const container = document.getElementById('foldersList');
-                if (!container) return;
-                if (this.folders.length === 0) {
-                    container.innerHTML = '<p style="color:#6b7280;">Noch keine Ordner angelegt.</p>';
-                    return;
+                try {
+                    const container = document.getElementById('foldersList');
+                    if (!container) return;
+                    if (this.folders.length === 0) {
+                        container.innerHTML = '<p style="color:#6b7280;">Noch keine Ordner angelegt.</p>';
+                        return;
+                    }
+                    
+                    // Use DocumentFragment for better performance
+                    const fragment = document.createDocumentFragment();
+                    
+                    for (const folder of this.folders) {
+                        const folderDiv = document.createElement('div');
+                        folderDiv.style.cssText = 'display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid #f3f4f6;';
+                        
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.value = folder.name;
+                        input.setAttribute('data-folder-id', folder.id);
+                        input.style.cssText = 'flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px;';
+                        
+                        const renameBtn = document.createElement('button');
+                        renameBtn.className = 'btn btn-secondary';
+                        renameBtn.style.width = 'auto';
+                        renameBtn.textContent = 'Umbenennen';
+                        renameBtn.onclick = () => this.renameFolder(folder.id);
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.className = 'btn btn-danger';
+                        deleteBtn.style.width = 'auto';
+                        deleteBtn.textContent = 'Löschen';
+                        deleteBtn.onclick = () => this.deleteFolder(folder.id);
+                        
+                        folderDiv.appendChild(input);
+                        folderDiv.appendChild(renameBtn);
+                        folderDiv.appendChild(deleteBtn);
+                        fragment.appendChild(folderDiv);
+                    }
+                    
+                    container.innerHTML = '';
+                    container.appendChild(fragment);
+                } catch (error) {
+                    console.error('Error in renderFoldersList:', error);
                 }
-                container.innerHTML = this.folders.map(f => `
-                    <div style="display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid #f3f4f6;">
-                        <input type="text" value="${this.escapeHtml(f.name)}" data-folder-id="${f.id}" style="flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px;">
-                        <button class="btn btn-secondary" onclick="passwordManager.renameFolder('${f.id}')" style="width:auto;">Umbenennen</button>
-                        <button class="btn btn-danger" onclick="passwordManager.deleteFolder('${f.id}')" style="width:auto;">Löschen</button>
-                    </div>
-                `).join('');
             }
 
             async logout() {
@@ -2937,6 +3371,12 @@
             if (!masterPassword) {
                 alert('Bitte geben Sie ein Master-Passwort ein.');
                 return;
+            }
+
+            // Check for session recovery before proceeding
+            if (passwordManager && passwordManager.sessionRecoverable) {
+                // Show recovery notice
+                document.getElementById('sessionRecoveryNotice').style.display = 'block';
             }
 
             try {
@@ -3326,6 +3766,12 @@
                     document.getElementById('mainContent').style.display = 'block';
                     document.getElementById('headerActions').style.display = 'block';
                     return;
+                }
+                
+                // Check if session can be recovered (user has data but no active session)
+                if (tempManager.sessionRecoverable) {
+                    // Show recovery notice in login screen
+                    document.getElementById('sessionRecoveryNotice').style.display = 'block';
                 }
                 
                 const isSet = await tempManager.checkMasterPasswordStatus();

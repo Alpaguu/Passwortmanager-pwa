@@ -38,7 +38,7 @@ app.use(session({
     saveUninitialized: false,
     rolling: true, // refresh expiration on each request
     store: new FileStore({
-        retries: 5, // More retries for distributed app
+        retries: 10, // More retries for distributed app
         path: process.env.ELECTRON === 'true' 
             ? path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'sessions')
             : path.join(__dirname, 'data', 'sessions'),
@@ -54,14 +54,22 @@ app.use(session({
         encoding: 'utf8',
         fileExtension: '.json',
         // Additional options for distributed app
-        secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production'
+        secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
+        // Better error handling for distributed app
+        reapAsync: true,
+        reapInterval: 60 * 60, // Clean up expired sessions every hour
+        // Ensure proper file permissions
+        fileMode: 0o600,
+        dirMode: 0o755
     }),
     cookie: {
         // In Electron desktop (http://localhost) we must NOT require secure cookies
         secure: process.env.ELECTRON === 'true' ? false : process.env.NODE_ENV === 'production',
         httpOnly: true,
         sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        // Better cookie handling for Electron
+        domain: process.env.ELECTRON === 'true' ? 'localhost' : undefined
     }
 }));
 
@@ -69,7 +77,185 @@ app.use(session({
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'passwords.json');
 const MASTER_PASSWORDS_FILE = path.join(DATA_DIR, 'master_passwords.json');
-const FOLDERS_FILE = path.join(DATA_DIR, 'folders.json');
+const FOLDERS_FILE = path.join(__dirname, 'folders.json');
+
+// Performance-Optimierung: Memory-Cache für Passwörter
+const passwordCache = new Map();
+const cacheTimestamps = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 Minuten Cache-TTL
+
+// Performance-Optimierung: Index für schnelle Suche
+const searchIndex = new Map();
+const indexTimestamps = new Map();
+const INDEX_TTL = 10 * 60 * 1000; // 10 Minuten Index-TTL
+
+// Cache-Management
+const getCachedPasswords = (dataKey) => {
+    const cacheKey = `passwords_${dataKey}`;
+    const cached = passwordCache.get(cacheKey);
+    const timestamp = cacheTimestamps.get(cacheKey);
+    
+    if (cached && timestamp && (Date.now() - timestamp) < CACHE_TTL) {
+        performanceMetrics.cacheHits++;
+        return cached;
+    }
+    
+    performanceMetrics.cacheMisses++;
+    return null;
+};
+
+const setCachedPasswords = (dataKey, passwords) => {
+    const cacheKey = `passwords_${dataKey}`;
+    passwordCache.set(cacheKey, passwords);
+    cacheTimestamps.set(cacheKey, Date.now());
+};
+
+const invalidateCache = (dataKey) => {
+    const cacheKey = `passwords_${dataKey}`;
+    passwordCache.delete(cacheKey);
+    cacheTimestamps.delete(cacheKey);
+    
+    // Auch den Index invalidieren
+    const indexKey = `index_${dataKey}`;
+    searchIndex.delete(indexKey);
+    indexTimestamps.delete(indexKey);
+};
+
+const clearAllCaches = () => {
+    passwordCache.clear();
+    cacheTimestamps.clear();
+    searchIndex.clear();
+    indexTimestamps.clear();
+};
+
+// Cache-Cleanup-Mechanismus
+const cleanupExpiredCaches = () => {
+    const now = Date.now();
+    
+    // Lösche abgelaufene Passwort-Caches
+    for (const [key, timestamp] of cacheTimestamps.entries()) {
+        if (now - timestamp > CACHE_TTL) {
+            passwordCache.delete(key);
+            cacheTimestamps.delete(key);
+        }
+    }
+    
+    // Lösche abgelaufene Such-Indizes
+    for (const [key, timestamp] of indexTimestamps.entries()) {
+        if (now - timestamp > INDEX_TTL) {
+            searchIndex.delete(key);
+            indexTimestamps.delete(key);
+        }
+    }
+    
+    // Log Cache-Status
+    if (process.env.NODE_ENV === 'development') {
+        console.log(`Cache cleanup: ${passwordCache.size} password caches, ${searchIndex.size} search indices`);
+    }
+};
+
+// Cache-Cleanup alle 2 Minuten
+setInterval(cleanupExpiredCaches, 2 * 60 * 1000);
+
+// Performance-Monitoring
+const performanceMetrics = {
+    operations: new Map(),
+    cacheHits: 0,
+    cacheMisses: 0,
+    totalOperations: 0
+};
+
+const trackOperation = (operation, startTime) => {
+    const duration = Date.now() - startTime;
+    if (!performanceMetrics.operations.has(operation)) {
+        performanceMetrics.operations.set(operation, []);
+    }
+    performanceMetrics.operations.get(operation).push(duration);
+    
+    // Behalte nur die letzten 100 Messungen
+    if (performanceMetrics.operations.get(operation).length > 100) {
+        performanceMetrics.operations.get(operation).shift();
+    }
+    
+    performanceMetrics.totalOperations++;
+};
+
+const getPerformanceStats = () => {
+    const stats = {};
+    for (const [operation, durations] of performanceMetrics.operations.entries()) {
+        if (durations.length > 0) {
+            const avg = durations.reduce((a, b) => a + b, 0) / durations.length;
+            const min = Math.min(...durations);
+            const max = Math.max(...durations);
+            stats[operation] = { avg: Math.round(avg), min, max, count: durations.length };
+        }
+    }
+    
+    return {
+        operations: stats,
+        cache: {
+            hits: performanceMetrics.cacheHits,
+            misses: performanceMetrics.cacheMisses,
+            hitRate: performanceMetrics.totalOperations > 0 ? 
+                (performanceMetrics.cacheHits / performanceMetrics.totalOperations * 100).toFixed(2) + '%' : '0%'
+        },
+        totalOperations: performanceMetrics.totalOperations
+    };
+};
+
+// Index-basierte Suche
+const buildSearchIndex = (passwords, dataKey) => {
+    const indexKey = `index_${dataKey}`;
+    const index = new Map();
+    
+    passwords.forEach((pwd, idx) => {
+        // Index für Titel (case-insensitive)
+        const titleLower = pwd.title.toLowerCase();
+        const titleWords = titleLower.split(/\s+/);
+        titleWords.forEach(word => {
+            if (word.length > 2) { // Nur Wörter mit mehr als 2 Zeichen indexieren
+                if (!index.has(word)) index.set(word, new Set());
+                index.get(word).add(idx);
+            }
+        });
+        
+        // Index für Benutzername (case-insensitive)
+        const usernameLower = pwd.username.toLowerCase();
+        if (usernameLower.length > 2) {
+            if (!index.has(usernameLower)) index.set(usernameLower, new Set());
+            index.get(usernameLower).add(idx);
+        }
+        
+        // Index für URL (case-insensitive)
+        if (pwd.url) {
+            const urlLower = pwd.url.toLowerCase();
+            const urlWords = urlLower.split(/[\/\.\-\?=&]/);
+            urlWords.forEach(word => {
+                if (word.length > 2) {
+                    if (!index.has(word)) index.set(word, new Set());
+                    index.get(word).add(idx);
+                }
+            });
+        }
+    });
+    
+    searchIndex.set(indexKey, index);
+    indexTimestamps.set(indexKey, Date.now());
+    
+    return index;
+};
+
+const getSearchIndex = (dataKey) => {
+    const indexKey = `index_${dataKey}`;
+    const index = searchIndex.get(indexKey);
+    const timestamp = indexTimestamps.get(indexKey);
+    
+    if (index && timestamp && (Date.now() - timestamp) < INDEX_TTL) {
+        return index;
+    }
+    
+    return null;
+};
 
 // Session management
 const getMasterPassword = (req) => {
@@ -78,6 +264,38 @@ const getMasterPassword = (req) => {
     } catch (error) {
         console.error('Error getting master password from session:', error);
         return null;
+    }
+};
+
+// Session recovery function - try to restore session from stored data
+const tryRecoverSession = async (req) => {
+    try {
+        // If session is already valid, no need to recover
+        if (req.session?.authenticated && req.session?.masterPassword) {
+            return true;
+        }
+        
+        // Check if we have any stored passwords to recover from
+        const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
+        const passwordsFile = path.join(dataDir, 'passwords.json');
+        const masterPasswordsFile = path.join(dataDir, 'master_passwords.json');
+        
+        if (!fsSync.existsSync(passwordsFile) || !fsSync.existsSync(masterPasswordsFile)) {
+            return false; // No data to recover from
+        }
+        
+        // Try to read master passwords to see if any exist
+        const masterPasswords = JSON.parse(fsSync.readFileSync(masterPasswordsFile, 'utf8'));
+        if (!Array.isArray(masterPasswords) || masterPasswords.length === 0) {
+            return false; // No master passwords stored
+        }
+        
+        // Session recovery is possible - user needs to re-enter master password
+        // but their data is still there
+        return 'RECOVERABLE';
+    } catch (error) {
+        console.error('Error during session recovery check:', error);
+        return false;
     }
 };
 
@@ -92,10 +310,34 @@ const setMasterPassword = (req, password) => {
             req.session.save((err) => {
                 if (err) {
                     console.error('Error saving session:', err);
+                    
+                    // For distributed app, try to diagnose the issue
+                    if (process.env.ELECTRON === 'true') {
+                        const fs = require('fs');
+                        const path = require('path');
+                        const sessionsDir = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'sessions');
+                        
+                        try {
+                            // Check if directory exists and is writable
+                            if (!fs.existsSync(sessionsDir)) {
+                                console.error('Sessions directory does not exist:', sessionsDir);
+                            } else {
+                                // Test write permissions
+                                const testFile = path.join(sessionsDir, '.test-write-' + Date.now());
+                                fs.writeFileSync(testFile, 'test');
+                                fs.unlinkSync(testFile);
+                                console.log('Write permissions OK, session save error may be temporary');
+                            }
+                        } catch (permError) {
+                            console.error('Permission test failed:', permError.message);
+                        }
+                    }
+                    
                     // Don't reject immediately, try to continue
                     // The session might still work in memory
                     resolve();
                 } else {
+                    console.log('Session saved successfully');
                     resolve();
                 }
             });
@@ -191,9 +433,35 @@ class FileManager {
         }
     }
 
+    // Optimierte Version mit Cache
+    static async readPasswordsCached(dataKey) {
+        // Versuche Cache zu verwenden
+        const cached = getCachedPasswords(dataKey);
+        if (cached) {
+            return cached;
+        }
+        
+        // Cache miss - lade von Disk
+        const passwords = await this.readPasswords();
+        
+        // Cache setzen
+        setCachedPasswords(dataKey, passwords);
+        
+        return passwords;
+    }
+
     static async writePasswords(passwords) {
         await this.ensureDataDirectory();
         await fs.writeFile(DATA_FILE, JSON.stringify(passwords, null, 2));
+    }
+
+    // Optimierte Version mit Cache-Invalidierung
+    static async writePasswordsCached(passwords, dataKey) {
+        await this.ensureDataDirectory();
+        await fs.writeFile(DATA_FILE, JSON.stringify(passwords, null, 2));
+        
+        // Cache invalidieren
+        invalidateCache(dataKey);
     }
 
     static async readFolders() {
@@ -430,6 +698,240 @@ class FileManager {
         await this.writePasswords(encryptedPasswords);
     }
 
+    // Neue optimierte Methoden für einzelne Passwort-Operationen
+    static async encryptSinglePassword(passwordData, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        const salt = EncryptionManager.generateSalt();
+        const key = EncryptionManager.deriveKey(keyString, salt);
+        
+        const encryptedPassword = EncryptionManager.encrypt(passwordData.password, key);
+        const encryptedUsername = EncryptionManager.encrypt(passwordData.username, key);
+        
+        return {
+            ...passwordData,
+            password: encryptedPassword.encrypted,
+            passwordIv: encryptedPassword.iv,
+            passwordSalt: salt.toString('hex'),
+            username: encryptedUsername.encrypted,
+            usernameIv: encryptedUsername.iv,
+            usernameSalt: salt.toString('hex'),
+            encryptionScheme: ENCRYPTION_SCHEME
+        };
+    }
+
+    static async addSinglePassword(passwordData, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        // Lade alle Passwörter
+        const passwords = await this.readPasswords();
+        
+        // Verschlüssele nur das neue Passwort
+        const encryptedPassword = await this.encryptSinglePassword(passwordData, keyString);
+        
+        // Füge es zur Liste hinzu
+        passwords.push(encryptedPassword);
+        
+        // Speichere die aktualisierte Liste mit Cache-Invalidierung
+        await this.writePasswordsCached(passwords, keyString);
+        
+        return encryptedPassword;
+    }
+
+    static async updateSinglePassword(id, passwordData, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        // Lade alle Passwörter
+        const passwords = await this.readPasswords();
+        
+        // Finde den Index des zu aktualisierenden Passworts
+        const index = passwords.findIndex(pwd => pwd.id === id);
+        if (index === -1) {
+            throw new Error('Password not found');
+        }
+
+        // Verschlüssele nur das aktualisierte Passwort
+        const encryptedPassword = await this.encryptSinglePassword(passwordData, keyString);
+        
+        // Aktualisiere den Eintrag
+        passwords[index] = {
+            ...encryptedPassword,
+            id: id, // Stelle sicher, dass die ID erhalten bleibt
+            createdAt: passwords[index].createdAt // Behalte das ursprüngliche Erstellungsdatum
+        };
+        
+        // Speichere die aktualisierte Liste mit Cache-Invalidierung
+        await this.writePasswordsCached(passwords, keyString);
+        
+        return passwords[index];
+    }
+
+    static async deleteSinglePassword(id, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        // Lade alle Passwörter
+        const passwords = await this.readPasswords();
+        
+        // Filtere das zu löschende Passwort heraus
+        const filteredPasswords = passwords.filter(pwd => pwd.id !== id);
+        
+        if (filteredPasswords.length === passwords.length) {
+            throw new Error('Password not found');
+        }
+        
+        // Speichere die gefilterte Liste mit Cache-Invalidierung
+        await this.writePasswordsCached(filteredPasswords, keyString);
+        
+        return true;
+    }
+
+    // Optimierte Methode für das Verschieben von Passwörtern (keine Neuverschlüsselung nötig)
+    static async movePasswordsToFolder(passwordIds, targetFolderId, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        // Lade alle Passwörter
+        const passwords = await this.readPasswords();
+        
+        // Aktualisiere nur die folderId für die angegebenen Passwörter
+        let updated = false;
+        const updatedPasswords = passwords.map(pwd => {
+            if (passwordIds.includes(pwd.id) && pwd.folderId !== targetFolderId) {
+                updated = true;
+                return { ...pwd, folderId: targetFolderId, updatedAt: new Date().toISOString() };
+            }
+            return pwd;
+        });
+        
+        if (!updated) {
+            return false; // Keine Änderungen
+        }
+        
+        // Speichere die aktualisierte Liste mit Cache-Invalidierung
+        await this.writePasswordsCached(updatedPasswords, keyString);
+        
+        return true;
+    }
+
+    // Optimierte Methode für das Batch-Erstellen von Passwörtern
+    static async addMultiplePasswords(passwordsData, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        if (!Array.isArray(passwordsData) || passwordsData.length === 0) {
+            throw new Error('Passwords data array is required');
+        }
+
+        // Lade alle bestehenden Passwörter
+        const existingPasswords = await this.readPasswords();
+        
+        // Verschlüssele alle neuen Passwörter auf einmal
+        const encryptedPasswords = await Promise.all(
+            passwordsData.map(async (passwordData) => {
+                return await this.encryptSinglePassword(passwordData, keyString);
+            })
+        );
+        
+        // Füge sie zur bestehenden Liste hinzu
+        const allPasswords = [...existingPasswords, ...encryptedPasswords];
+        
+        // Speichere alle Passwörter auf einmal mit Cache-Invalidierung
+        await this.writePasswordsCached(allPasswords, keyString);
+        
+        return encryptedPasswords;
+    }
+
+    // Optimierte Methode für das Batch-Aktualisieren von Passwörtern
+    static async updateMultiplePasswords(updates, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        if (!Array.isArray(updates) || updates.length === 0) {
+            throw new Error('Updates array is required and must not be empty');
+        }
+
+        // Lade alle bestehenden Passwörter
+        const passwords = await this.readPasswords();
+        
+        // Erstelle eine Map für schnellen Zugriff
+        const passwordMap = new Map(passwords.map(p => [p.id, p]));
+        
+        // Aktualisiere die Passwörter
+        let hasUpdates = false;
+        const updatedPasswords = passwords.map(pwd => {
+            const update = updates.find(u => u.id === pwd.id);
+            if (update) {
+                hasUpdates = true;
+                return {
+                    ...pwd,
+                    ...update,
+                    updatedAt: new Date().toISOString()
+                };
+            }
+            return pwd;
+        });
+        
+        if (!hasUpdates) {
+            return []; // Keine Änderungen
+        }
+        
+        // Verschlüssele alle aktualisierten Passwörter
+        const encryptedPasswords = await Promise.all(
+            updatedPasswords.map(async (pwd) => {
+                const update = updates.find(u => u.id === pwd.id);
+                if (update) {
+                    // Nur aktualisierte Passwörter neu verschlüsseln
+                    return await this.encryptSinglePassword(pwd, keyString);
+                }
+                return pwd; // Nicht aktualisierte Passwörter bleiben unverändert
+            })
+        );
+        
+        // Speichere alle Passwörter mit Cache-Invalidierung
+        await this.writePasswordsCached(encryptedPasswords, keyString);
+        
+        return encryptedPasswords.filter(pwd => {
+            return updates.some(u => u.id === pwd.id);
+        });
+    }
+
+    // Optimierte Methode für das Batch-Löschen von Passwörtern
+    static async deleteMultiplePasswords(passwordIds, keyString) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        if (!Array.isArray(passwordIds) || passwordIds.length === 0) {
+            throw new Error('Password IDs array is required and must not be empty');
+        }
+
+        // Lade alle bestehenden Passwörter
+        const passwords = await this.readPasswords();
+        
+        // Filtere die zu löschenden Passwörter heraus
+        const filteredPasswords = passwords.filter(pwd => !passwordIds.includes(pwd.id));
+        
+        if (filteredPasswords.length === passwords.length) {
+            return 0; // Keine Passwörter gelöscht
+        }
+        
+        // Speichere die gefilterte Liste mit Cache-Invalidierung
+        await this.writePasswordsCached(filteredPasswords, keyString);
+        
+        return passwords.length - filteredPasswords.length; // Anzahl der gelöschten Passwörter
+    }
+
     static async loadAndDecryptPasswords(keyString) {
         const encryptedPasswords = await this.readPasswords();
         
@@ -438,6 +940,39 @@ class FileManager {
         }
 
         return encryptedPasswords.map(pwd => {
+            try {
+                // Use stored salt for decryption
+                const salt = Buffer.from(pwd.passwordSalt || pwd.passwordSalt || '00000000000000000000000000000000', 'hex');
+                const key = EncryptionManager.deriveKey(keyString, salt);
+                
+                return {
+                    ...pwd,
+                    password: EncryptionManager.decrypt({ encrypted: pwd.password, iv: pwd.passwordIv }, key),
+                    username: EncryptionManager.decrypt({ encrypted: pwd.username, iv: pwd.usernameIv }, key)
+                };
+            } catch (error) {
+                console.error('Error decrypting password:', error);
+                throw new Error('Decryption failed - wrong master password');
+            }
+        });
+    }
+
+    // Optimierte Version mit Cache
+    static async loadAndDecryptPasswordsCached(keyString) {
+        // Versuche Cache zu verwenden
+        const cached = getCachedPasswords(keyString);
+        if (cached) {
+            return cached;
+        }
+        
+        // Cache miss - lade und entschlüssele
+        const encryptedPasswords = await this.readPasswords();
+        
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        const decryptedPasswords = encryptedPasswords.map(pwd => {
             try {
                 // Use stored salt for decryption
                 const salt = Buffer.from(pwd.passwordSalt || pwd.usernameSalt || '00000000000000000000000000000000', 'hex');
@@ -453,6 +988,114 @@ class FileManager {
                 throw new Error('Decryption failed - wrong master password');
             }
         });
+        
+        // Cache setzen
+        setCachedPasswords(keyString, decryptedPasswords);
+        
+        // Index für Suche aufbauen
+        buildSearchIndex(decryptedPasswords, keyString);
+        
+        return decryptedPasswords;
+    }
+
+    // Optimierte Suche mit Index
+    static async searchPasswords(query, keyString, limit = 50) {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        // Lade Passwörter (mit Cache)
+        const passwords = await this.loadAndDecryptPasswordsCached(keyString);
+        
+        if (!query || query.trim().length === 0) {
+            return passwords.slice(0, limit);
+        }
+
+        // Versuche Index zu verwenden
+        let index = getSearchIndex(keyString);
+        if (!index) {
+            // Index neu aufbauen
+            index = buildSearchIndex(passwords, keyString);
+        }
+
+        const queryLower = query.toLowerCase();
+        const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+        
+        if (queryWords.length === 0) {
+            return passwords.slice(0, limit);
+        }
+
+        // Suche mit Index
+        const resultIndices = new Map();
+        
+        queryWords.forEach(word => {
+            const matches = index.get(word);
+            if (matches) {
+                matches.forEach(idx => {
+                    resultIndices.set(idx, (resultIndices.get(idx) || 0) + 1);
+                });
+            }
+        });
+
+        // Sortiere nach Relevanz (Anzahl der Übereinstimmungen)
+        const sortedIndices = Array.from(resultIndices.entries())
+            .sort((a, b) => b[1] - a[1])
+            .map(([idx]) => idx)
+            .slice(0, limit);
+
+        return sortedIndices.map(idx => passwords[idx]);
+    }
+
+    // Pagination für große Datenmengen
+    static async getPasswordsPaginated(keyString, page = 1, pageSize = 50, sortBy = 'title', sortOrder = 'asc') {
+        if (!keyString) {
+            throw new Error('Master password not set');
+        }
+
+        // Lade Passwörter (mit Cache)
+        const passwords = await this.loadAndDecryptPasswordsCached(keyString);
+        
+        // Sortierung
+        const sortedPasswords = [...passwords].sort((a, b) => {
+            let aVal = a[sortBy] || '';
+            let bVal = b[sortBy] || '';
+            
+            // Fallback für numerische Felder
+            if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+                aVal = new Date(aVal).getTime();
+                bVal = new Date(bVal).getTime();
+            } else {
+                aVal = String(aVal).toLowerCase();
+                bVal = String(bVal).toLowerCase();
+            }
+            
+            if (sortOrder === 'desc') {
+                return aVal > bVal ? -1 : aVal < bVal ? 1 : 0;
+            } else {
+                return aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+            }
+        });
+        
+        // Pagination
+        const totalCount = sortedPasswords.length;
+        const totalPages = Math.ceil(totalCount / pageSize);
+        const currentPage = Math.max(1, Math.min(page, totalPages));
+        const startIndex = (currentPage - 1) * pageSize;
+        const endIndex = startIndex + pageSize;
+        
+        const paginatedPasswords = sortedPasswords.slice(startIndex, endIndex);
+        
+        return {
+            passwords: paginatedPasswords,
+            pagination: {
+                currentPage,
+                pageSize,
+                totalCount,
+                totalPages,
+                hasNextPage: currentPage < totalPages,
+                hasPrevPage: currentPage > 1
+            }
+        };
     }
 }
 
@@ -725,10 +1368,66 @@ app.post('/api/verify-master-password', async (req, res) => {
 
 // Get all passwords
 app.get('/api/all', requireMasterPassword, async (req, res) => {
+    const startTime = Date.now();
     try {
         const dataKey = getMasterPassword(req); // now stores DataKey
-        const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
+        const passwords = await FileManager.loadAndDecryptPasswordsCached(dataKey);
+        trackOperation('getAllPasswords', startTime);
         res.json(passwords);
+    } catch (error) {
+        trackOperation('getAllPasswords_error', startTime);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Optimierte Suche nach Passwörtern
+app.get('/api/search', requireMasterPassword, async (req, res) => {
+    try {
+        const { q: query, limit = 50 } = req.query;
+        const dataKey = getMasterPassword(req);
+        
+        if (!dataKey) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        
+        const searchLimit = Math.min(parseInt(limit) || 50, 100); // Max 100 Ergebnisse
+        
+        const results = await FileManager.searchPasswords(query, dataKey, searchLimit);
+        
+        res.json({
+            query: query || '',
+            results: results,
+            count: results.length,
+            limit: searchLimit,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Paginierte Passwort-Liste für große Datenmengen
+app.get('/api/passwords', requireMasterPassword, async (req, res) => {
+    try {
+        const { page = 1, pageSize = 50, sortBy = 'title', sortOrder = 'asc' } = req.query;
+        const dataKey = getMasterPassword(req);
+        
+        if (!dataKey) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        const pageSizeNum = Math.min(Math.max(1, parseInt(pageSize) || 50), 200); // Max 200 pro Seite
+        
+        const result = await FileManager.getPasswordsPaginated(
+            dataKey, 
+            pageNum, 
+            pageSizeNum, 
+            sortBy, 
+            sortOrder
+        );
+        
+        res.json(result);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -748,6 +1447,7 @@ const normalizeUrl = (raw) => {
 
 // Add new password
 app.post('/api/add', requireMasterPassword, async (req, res) => {
+    const startTime = Date.now();
     try {
         const { title, username, password, url, notes, folderId } = req.body;
         
@@ -771,11 +1471,72 @@ app.post('/api/add', requireMasterPassword, async (req, res) => {
 
         const dataKey = getMasterPassword(req);
         if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
-        const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
-        passwords.push(newPassword);
-        await FileManager.encryptAndSavePasswords(passwords, dataKey);
+        
+        // Verwende die optimierte Methode für einzelne Passwörter
+        const encryptedPassword = await FileManager.addSinglePassword(newPassword, dataKey);
+        
+        // Entschlüssele für die Antwort
+        const decryptedPassword = await FileManager.loadAndDecryptPasswordsCached(dataKey);
+        const addedPassword = decryptedPassword.find(p => p.id === encryptedPassword.id);
 
-        res.status(201).json(newPassword);
+        trackOperation('addPassword', startTime);
+        res.status(201).json(addedPassword);
+    } catch (error) {
+        trackOperation('addPassword_error', startTime);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add multiple passwords (optimized)
+app.post('/api/add-multiple', requireMasterPassword, async (req, res) => {
+    try {
+        const { passwords } = req.body;
+        
+        if (!Array.isArray(passwords) || passwords.length === 0) {
+            return res.status(400).json({ 
+                error: 'Passwords array is required and must not be empty' 
+            });
+        }
+
+        // Validiere alle Passwörter
+        for (const pwd of passwords) {
+            if (!pwd.title || !pwd.username || !pwd.password) {
+                return res.status(400).json({ 
+                    error: 'All passwords must have title, username, and password' 
+                });
+            }
+        }
+
+        const dataKey = getMasterPassword(req);
+        if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
+        
+        // Bereite die Passwörter vor
+        const preparedPasswords = passwords.map(pwd => ({
+            id: uuidv4(),
+            title: pwd.title.trim(),
+            username: pwd.username.trim(),
+            password: pwd.password,
+            url: normalizeUrl(pwd.url || ''),
+            notes: pwd.notes || '',
+            folderId: pwd.folderId || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        }));
+        
+        // Verwende die optimierte Batch-Methode
+        const encryptedPasswords = await FileManager.addMultiplePasswords(preparedPasswords, dataKey);
+        
+        // Entschlüssele für die Antwort
+        const decryptedPasswords = await FileManager.loadAndDecryptPasswords(dataKey);
+        const addedPasswords = encryptedPasswords.map(encrypted => {
+            return decryptedPasswords.find(p => p.id === encrypted.id);
+        });
+
+        res.status(201).json({
+            message: `Successfully created ${addedPasswords.length} password(s)`,
+            passwords: addedPasswords,
+            count: addedPasswords.length
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -783,6 +1544,7 @@ app.post('/api/add', requireMasterPassword, async (req, res) => {
 
 // Update password
 app.put('/api/update/:id', requireMasterPassword, async (req, res) => {
+    const startTime = Date.now();
     try {
         const { id } = req.params;
         const { title, username, password, url, notes, folderId } = req.body;
@@ -795,26 +1557,84 @@ app.put('/api/update/:id', requireMasterPassword, async (req, res) => {
 
         const dataKey = getMasterPassword(req);
         if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
-        const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
-        const index = passwords.findIndex(pwd => pwd.id === id);
         
-        if (index === -1) {
-            return res.status(404).json({ error: 'Password not found' });
-        }
-
-        passwords[index] = {
-            ...passwords[index],
+        // Verwende die optimierte Methode für einzelne Passwörter
+        const updatedPasswordData = {
             title,
             username,
             password,
             url: normalizeUrl(url || ''),
             notes: notes || '',
-            folderId: folderId ?? passwords[index].folderId ?? null,
+            folderId: folderId ?? null,
             updatedAt: new Date().toISOString()
         };
 
-        await FileManager.encryptAndSavePasswords(passwords, dataKey);
-        res.json(passwords[index]);
+        const encryptedPassword = await FileManager.updateSinglePassword(id, updatedPasswordData, dataKey);
+        
+        // Entschlüssele für die Antwort
+        const decryptedPassword = await FileManager.loadAndDecryptPasswordsCached(dataKey);
+        const updatedPassword = decryptedPassword.find(p => p.id === id);
+
+        trackOperation('updatePassword', startTime);
+        res.json(updatedPassword);
+    } catch (error) {
+        trackOperation('updatePassword_error', startTime);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update multiple passwords (optimized)
+app.put('/api/update-multiple', requireMasterPassword, async (req, res) => {
+    try {
+        const { updates } = req.body;
+        
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.status(400).json({ 
+                error: 'Updates array is required and must not be empty' 
+            });
+        }
+
+        // Validiere alle Updates
+        for (const update of updates) {
+            if (!update.id || !update.title || !update.username || !update.password) {
+                return res.status(400).json({ 
+                    error: 'All updates must have id, title, username, and password' 
+                });
+            }
+        }
+
+        const dataKey = getMasterPassword(req);
+        if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
+        
+        // Bereite die Updates vor
+        const preparedUpdates = updates.map(update => ({
+            id: update.id,
+            title: update.title.trim(),
+            username: update.username.trim(),
+            password: update.password,
+            url: normalizeUrl(update.url || ''),
+            notes: update.notes || '',
+            folderId: update.folderId ?? null
+        }));
+        
+        // Verwende die optimierte Batch-Methode
+        const encryptedPasswords = await FileManager.updateMultiplePasswords(preparedUpdates, dataKey);
+        
+        if (encryptedPasswords.length === 0) {
+            return res.json({ message: 'No passwords were updated' });
+        }
+        
+        // Entschlüssele für die Antwort
+        const decryptedPasswords = await FileManager.loadAndDecryptPasswords(dataKey);
+        const updatedPasswords = encryptedPasswords.map(encrypted => {
+            return decryptedPasswords.find(p => p.id === encrypted.id);
+        });
+
+        res.json({
+            message: `Successfully updated ${updatedPasswords.length} password(s)`,
+            passwords: updatedPasswords,
+            count: updatedPasswords.length
+        });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -826,29 +1646,64 @@ app.delete('/api/delete/:id', requireMasterPassword, async (req, res) => {
         const { id } = req.params;
         const dataKey = getMasterPassword(req);
         if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
-        const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
-        const filteredPasswords = passwords.filter(pwd => pwd.id !== id);
         
-        if (filteredPasswords.length === passwords.length) {
-            return res.status(404).json({ error: 'Password not found' });
-        }
-
-        await FileManager.encryptAndSavePasswords(filteredPasswords, dataKey);
+        // Verwende die optimierte Methode für einzelne Passwörter
+        await FileManager.deleteSinglePassword(id, dataKey);
+        
         res.json({ message: 'Password deleted successfully' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Export passwords
+// Delete multiple passwords (optimized)
+app.delete('/api/delete-multiple', requireMasterPassword, async (req, res) => {
+    try {
+        const { passwordIds } = req.body;
+        
+        if (!Array.isArray(passwordIds) || passwordIds.length === 0) {
+            return res.status(400).json({ 
+                error: 'Password IDs array is required and must not be empty' 
+            });
+        }
+
+        const dataKey = getMasterPassword(req);
+        if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
+        
+        // Verwende die optimierte Batch-Methode
+        const deletedCount = await FileManager.deleteMultiplePasswords(passwordIds, dataKey);
+        
+        if (deletedCount === 0) {
+            return res.json({ message: 'No passwords were deleted' });
+        }
+        
+        res.json({ 
+            message: `Successfully deleted ${deletedCount} password(s)`,
+            deletedCount: deletedCount
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Export passwords and folders
 app.get('/api/export', requireMasterPassword, async (req, res) => {
     try {
         const dataKey = getMasterPassword(req);
         const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
+        const folders = await FileManager.readFolders();
+        // Sort folders by order index for export
+        const sortedFolders = folders.sort((a, b) => {
+            const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+            const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+            return orderA - orderB;
+        });
+        
         const exportData = {
-            version: '1.0',
+            version: '1.3',
             exportDate: new Date().toISOString(),
-            passwords
+            passwords,
+            folders: sortedFolders
         };
         
         res.setHeader('Content-Type', 'application/json');
@@ -859,10 +1714,10 @@ app.get('/api/export', requireMasterPassword, async (req, res) => {
     }
 });
 
-// Import passwords
+// Import passwords and folders
 app.post('/api/import', requireMasterPassword, async (req, res) => {
     try {
-        const { passwords } = req.body;
+        const { passwords, folders } = req.body;
         
         if (!Array.isArray(passwords)) {
             return res.status(400).json({ error: 'Invalid import data format' });
@@ -877,6 +1732,41 @@ app.post('/api/import', requireMasterPassword, async (req, res) => {
             }
         }
 
+        // Import folders if they exist
+        if (folders && Array.isArray(folders)) {
+            const existingFolders = await FileManager.readFolders();
+            const existingFolderNames = new Set(existingFolders.map(f => f.name.toLowerCase().trim()));
+            
+            // Filter out duplicate folders by name
+            const newFolders = folders.filter(f => !existingFolderNames.has(f.name.toLowerCase().trim()));
+            
+            if (newFolders.length > 0) {
+                const processedFolders = newFolders.map((folder, index) => ({
+                    ...folder,
+                    id: folder.id || uuidv4(),
+                    order: typeof folder.order === 'number' ? folder.order : (existingFolders.length + index),
+                    createdAt: folder.createdAt || new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                }));
+                
+                const allFolders = [...existingFolders, ...processedFolders];
+                
+                // Sort all folders by order index
+                allFolders.sort((a, b) => {
+                    const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+                    const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+                    return orderA - orderB;
+                });
+                
+                // Update order indices to ensure consistency
+                allFolders.forEach((folder, index) => {
+                    folder.order = index;
+                });
+                
+                await FileManager.writeFolders(allFolders);
+            }
+        }
+
         // Add IDs to imported passwords if missing
         const processedPasswords = passwords.map(pwd => ({
             ...pwd,
@@ -887,7 +1777,14 @@ app.post('/api/import', requireMasterPassword, async (req, res) => {
 
         const dataKey = getMasterPassword(req);
         await FileManager.encryptAndSavePasswords(processedPasswords, dataKey);
-        res.json({ message: 'Passwords imported successfully', count: processedPasswords.length });
+        
+        const importResult = { 
+            message: 'Data imported successfully', 
+            passwordsCount: processedPasswords.length,
+            foldersCount: folders && Array.isArray(folders) ? folders.length : 0
+        };
+        
+        res.json(importResult);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -923,10 +1820,27 @@ app.get('/api/session-status', async (req, res) => {
     try {
         let isAuthenticated = false;
         let sessionValid = false;
+        let sessionRecoverable = false;
+        let sessionInfo = {};
         
         try {
             sessionValid = Boolean(req.session && req.session.authenticated);
             isAuthenticated = Boolean(sessionValid && getMasterPassword(req));
+            
+            // Add detailed session info for debugging
+            sessionInfo = {
+                hasSession: Boolean(req.session),
+                sessionId: req.session?.id || null,
+                authenticated: req.session?.authenticated || false,
+                hasMasterPassword: Boolean(getMasterPassword(req)),
+                lastActivity: req.session?.lastActivity || null,
+                cookie: req.session?.cookie || null
+            };
+            
+            // Log session details for distributed app debugging
+            if (process.env.ELECTRON === 'true') {
+                console.log('Session status check - Session info:', sessionInfo);
+            }
         } catch (sessionError) {
             console.error('Session validation error:', sessionError);
             sessionValid = false;
@@ -948,20 +1862,38 @@ app.get('/api/session-status', async (req, res) => {
                 clearSession(req);
                 isAuthenticated = false;
             }
+        } else {
+            // Check if session can be recovered (user has data but no active session)
+            try {
+                const recoveryStatus = await tryRecoverSession(req);
+                sessionRecoverable = recoveryStatus === 'RECOVERABLE';
+            } catch (recoveryError) {
+                console.error('Session recovery check error:', recoveryError);
+                sessionRecoverable = false;
+            }
         }
 
         res.json({ 
             authenticated: isAuthenticated,
             sessionValid: sessionValid,
+            sessionRecoverable: sessionRecoverable,
             lastActivity: req.session?.lastActivity || null,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            sessionInfo: sessionInfo,
+            // Add environment info for debugging
+            environment: {
+                electron: process.env.ELECTRON === 'true',
+                nodeEnv: process.env.NODE_ENV,
+                dataDir: process.env.DATA_DIR || 'default'
+            }
         });
     } catch (error) {
         console.error('Session status check error:', error);
         res.status(500).json({ 
             error: 'Failed to check session status',
             authenticated: false,
-            sessionValid: false
+            sessionValid: false,
+            sessionRecoverable: false
         });
     }
 });
@@ -976,6 +1908,27 @@ app.get('/api/health', (req, res) => {
             sessionId: req.session?.id || null
         };
         
+        // Check file system permissions for distributed app
+        let fileSystemStatus = 'unknown';
+        if (process.env.ELECTRON === 'true') {
+            try {
+                const fs = require('fs');
+                const sessionsDir = path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'sessions');
+                
+                if (fs.existsSync(sessionsDir)) {
+                    // Test write permissions
+                    const testFile = path.join(sessionsDir, '.health-check-' + Date.now());
+                    fs.writeFileSync(testFile, 'health-check');
+                    fs.unlinkSync(testFile);
+                    fileSystemStatus = 'writable';
+                } else {
+                    fileSystemStatus = 'directory-missing';
+                }
+            } catch (fsError) {
+                fileSystemStatus = 'permission-error: ' + fsError.message;
+            }
+        }
+        
         res.json({ 
             status: 'OK', 
             timestamp: new Date().toISOString(),
@@ -983,7 +1936,9 @@ app.get('/api/health', (req, res) => {
             sessionInfo: sessionInfo,
             dataDir: DATA_DIR,
             electron: process.env.ELECTRON === 'true',
-            nodeEnv: process.env.NODE_ENV
+            nodeEnv: process.env.NODE_ENV,
+            fileSystemStatus: fileSystemStatus,
+            sessionSecret: process.env.SESSION_SECRET ? 'set' : 'not-set'
         });
     } catch (error) {
         console.error('Health check error:', error);
@@ -1038,6 +1993,7 @@ app.post('/api/folders', requireMasterPassword, async (req, res) => {
         const newFolder = {
             id: uuidv4(),
             name: String(name).trim(),
+            order: folders.length, // Set order to end of list
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -1097,6 +2053,13 @@ app.put('/api/folders/reorder', requireMasterPassword, async (req, res) => {
         const ordered = normalized.map(id => byId.get(id)).filter(Boolean);
         const rest = folders.filter(f => !normalized.includes(f.id));
         const finalList = [...ordered, ...rest];
+        
+        // Update order indices for all folders
+        finalList.forEach((folder, index) => {
+            folder.order = index;
+            folder.updatedAt = new Date().toISOString();
+        });
+        
         await FileManager.writeFolders(finalList);
         res.json(finalList);
     } catch (error) {
@@ -1153,25 +2116,46 @@ app.delete('/api/folders/:id', requireMasterPassword, async (req, res) => {
             });
         }
         
+        // Validate folder ID
+        if (!id || typeof id !== 'string' || id.trim().length === 0) {
+            return res.status(400).json({ error: 'Invalid folder ID' });
+        }
+        
         let folders = await FileManager.readFolders();
         const folderExists = folders.some(f => f.id === id);
         if (!folderExists) {
             return res.status(404).json({ error: 'Folder not found' });
         }
+        
+        // Remove folder
         folders = folders.filter(f => f.id !== id);
         await FileManager.writeFolders(folders);
 
-        // Reassign passwords
-        const dataKey = getMasterPassword(req);
-        const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
-        const targetFolderId = migrateTo === 'null' || !migrateTo ? null : String(migrateTo);
-        const updated = passwords.map(p => p.folderId === id ? { ...p, folderId: targetFolderId, updatedAt: new Date().toISOString() } : p);
-        await FileManager.encryptAndSavePasswords(updated, dataKey);
+        // Reassign passwords to the target folder (or null for "no folder")
+        try {
+            const dataKey = getMasterPassword(req);
+            const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
+            
+            // Always move passwords to "no folder" (null) when deleting a folder
+            const targetFolderId = null;
+            const updated = passwords.map(p => {
+                if (p.folderId === id) {
+                    return { ...p, folderId: targetFolderId, updatedAt: new Date().toISOString() };
+                }
+                return p;
+            });
+            
+            await FileManager.encryptAndSavePasswords(updated, dataKey);
+            console.log(`Moved ${updated.filter(p => p.folderId === null && p.folderId !== p.folderId).length} passwords to "no folder"`);
+        } catch (passwordError) {
+            console.error('Error reassigning passwords during folder deletion:', passwordError);
+            // Continue with folder deletion even if password reassignment fails
+        }
 
-        res.json({ message: 'Folder deleted', migratedTo: targetFolderId });
+        res.json({ message: 'Folder deleted', migratedTo: migrateTo === 'null' || !migrateTo ? null : String(migrateTo) });
     } catch (error) {
         console.error('Error deleting folder:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Internal server error during folder deletion' });
     }
 });
 
@@ -1193,7 +2177,9 @@ app.put('/api/passwords/:id/move', requireMasterPassword, async (req, res) => {
         }
         
         const dataKey = getMasterPassword(req);
-        const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
+        
+        // Lade alle Passwörter
+        const passwords = await FileManager.readPasswords();
         const index = passwords.findIndex(p => p.id === id);
         if (index === -1) {
             return res.status(404).json({ error: 'Password not found' });
@@ -1201,14 +2187,61 @@ app.put('/api/passwords/:id/move', requireMasterPassword, async (req, res) => {
         
         // Only update if folder actually changed
         if (passwords[index].folderId === folderId) {
-            return res.json(passwords[index]); // No change needed
+            // Entschlüssele für die Antwort
+            const decryptedPasswords = await FileManager.loadAndDecryptPasswords(dataKey);
+            const password = decryptedPasswords.find(p => p.id === id);
+            return res.json(password); // No change needed
         }
         
+        // Aktualisiere nur das folderId Feld
         passwords[index] = { ...passwords[index], folderId: folderId || null, updatedAt: new Date().toISOString() };
-        await FileManager.encryptAndSavePasswords(passwords, dataKey);
-        res.json(passwords[index]);
+        await FileManager.writePasswords(passwords);
+        
+        // Entschlüssele für die Antwort
+        const decryptedPasswords = await FileManager.loadAndDecryptPasswords(dataKey);
+        const updatedPassword = decryptedPasswords.find(p => p.id === id);
+        
+        res.json(updatedPassword);
     } catch (error) {
         console.error('Error moving password:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Batch move passwords to folder (optimized)
+app.put('/api/passwords/batch-move', requireMasterPassword, async (req, res) => {
+    try {
+        const { passwordIds, folderId } = req.body;
+        
+        if (!Array.isArray(passwordIds) || passwordIds.length === 0) {
+            return res.status(400).json({ error: 'Password IDs array is required' });
+        }
+        
+        // Double-check authentication before proceeding
+        const currentMasterPassword = getMasterPassword(req);
+        if (!currentMasterPassword || !req.session?.authenticated) {
+            return res.status(401).json({ 
+                error: 'Session expired. Please login again.',
+                code: 'SESSION_EXPIRED'
+            });
+        }
+        
+        const dataKey = getMasterPassword(req);
+        
+        // Verwende die optimierte Batch-Methode
+        const updated = await FileManager.movePasswordsToFolder(passwordIds, folderId, dataKey);
+        
+        if (!updated) {
+            return res.json({ message: 'No passwords were moved (already in target folder)' });
+        }
+        
+        res.json({ 
+            message: `Successfully moved ${passwordIds.length} password(s) to folder`,
+            movedCount: passwordIds.length,
+            targetFolderId: folderId
+        });
+    } catch (error) {
+        console.error('Error batch moving passwords:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1262,3 +2295,33 @@ const startHttpServer = () => {
 
 // Start the server
 startServer();
+
+// Performance-Statistiken
+app.get('/api/performance', requireMasterPassword, async (req, res) => {
+    try {
+        const stats = getPerformanceStats();
+        res.json({
+            ...stats,
+            timestamp: new Date().toISOString(),
+            cacheSize: {
+                passwords: passwordCache.size,
+                searchIndices: searchIndex.size
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Cache zurücksetzen (nur für Entwickler)
+app.post('/api/performance/reset-cache', requireMasterPassword, async (req, res) => {
+    try {
+        clearAllCaches();
+        res.json({ 
+            message: 'All caches cleared successfully',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
