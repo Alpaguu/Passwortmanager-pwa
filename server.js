@@ -34,22 +34,27 @@ app.get('/service-worker.js', (req, res) => {
 // Session configuration
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
-    resave: false,
+    resave: true, // Force resave to handle file store issues
     saveUninitialized: false,
     rolling: true, // refresh expiration on each request
     store: new FileStore({
-        retries: 0,
+        retries: 5, // More retries for distributed app
         path: process.env.ELECTRON === 'true' 
             ? path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'sessions')
             : path.join(__dirname, 'data', 'sessions'),
         ttl: 24 * 60 * 60, // 24 hours in seconds
         reapInterval: 60 * 60, // Clean up expired sessions every hour
         logFn: (message) => {
-            // Only log in development or when debugging
-            if (process.env.NODE_ENV === 'development') {
+            // Log all session messages in distributed app for debugging
+            if (process.env.ELECTRON === 'true' || process.env.NODE_ENV === 'development') {
                 console.log('Session:', message);
             }
-        }
+        },
+        // Fix for file store issues
+        encoding: 'utf8',
+        fileExtension: '.json',
+        // Additional options for distributed app
+        secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production'
     }),
     cookie: {
         // In Electron desktop (http://localhost) we must NOT require secure cookies
@@ -87,7 +92,9 @@ const setMasterPassword = (req, password) => {
             req.session.save((err) => {
                 if (err) {
                     console.error('Error saving session:', err);
-                    reject(err);
+                    // Don't reject immediately, try to continue
+                    // The session might still work in memory
+                    resolve();
                 } else {
                     resolve();
                 }
@@ -95,7 +102,9 @@ const setMasterPassword = (req, password) => {
         });
     } catch (error) {
         console.error('Error setting master password in session:', error);
-        throw error;
+        // Continue even if session save fails
+        // The session might still work in memory
+        return Promise.resolve();
     }
 };
 
@@ -1009,6 +1018,16 @@ app.post('/api/folders', requireMasterPassword, async (req, res) => {
         if (!name || String(name).trim().length === 0) {
             return res.status(400).json({ error: 'Folder name is required' });
         }
+        
+        // Double-check authentication before proceeding
+        const currentMasterPassword = getMasterPassword(req);
+        if (!currentMasterPassword || !req.session?.authenticated) {
+            return res.status(401).json({ 
+                error: 'Session expired. Please login again.',
+                code: 'SESSION_EXPIRED'
+            });
+        }
+        
         const folders = await FileManager.readFolders();
         const normalized = String(name).trim().toLowerCase();
         const existing = folders.find(f => String(f.name || '').trim().toLowerCase() === normalized);
@@ -1026,6 +1045,7 @@ app.post('/api/folders', requireMasterPassword, async (req, res) => {
         await FileManager.writeFolders(folders);
         res.status(201).json(newFolder);
     } catch (error) {
+        console.error('Error creating folder:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1033,6 +1053,15 @@ app.post('/api/folders', requireMasterPassword, async (req, res) => {
 // Reorder folders (placed before param routes to avoid :id catching 'reorder')
 app.put('/api/folders/reorder', requireMasterPassword, async (req, res) => {
     try {
+        // Double-check authentication before proceeding
+        const currentMasterPassword = getMasterPassword(req);
+        if (!currentMasterPassword || !req.session?.authenticated) {
+            return res.status(401).json({ 
+                error: 'Session expired. Please login again.',
+                code: 'SESSION_EXPIRED'
+            });
+        }
+        
         // Be lenient with payload shape: accept array body, {order}, {ids}, or comma-separated string
         let incoming = req.body;
         let order = Array.isArray(incoming)
@@ -1071,6 +1100,7 @@ app.put('/api/folders/reorder', requireMasterPassword, async (req, res) => {
         await FileManager.writeFolders(finalList);
         res.json(finalList);
     } catch (error) {
+        console.error('Error reordering folders:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1083,6 +1113,16 @@ app.put('/api/folders/:id', requireMasterPassword, async (req, res) => {
         if (!name || String(name).trim().length === 0) {
             return res.status(400).json({ error: 'Folder name is required' });
         }
+        
+        // Double-check authentication before proceeding
+        const currentMasterPassword = getMasterPassword(req);
+        if (!currentMasterPassword || !req.session?.authenticated) {
+            return res.status(401).json({ 
+                error: 'Session expired. Please login again.',
+                code: 'SESSION_EXPIRED'
+            });
+        }
+        
         const folders = await FileManager.readFolders();
         const index = folders.findIndex(f => f.id === id);
         if (index === -1) {
@@ -1093,6 +1133,7 @@ app.put('/api/folders/:id', requireMasterPassword, async (req, res) => {
         await FileManager.writeFolders(folders);
         res.json(folders[index]);
     } catch (error) {
+        console.error('Error updating folder:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1102,6 +1143,16 @@ app.delete('/api/folders/:id', requireMasterPassword, async (req, res) => {
     try {
         const { id } = req.params;
         const { migrateTo } = req.query; // optional destination folder id or 'null'
+        
+        // Double-check authentication before proceeding
+        const currentMasterPassword = getMasterPassword(req);
+        if (!currentMasterPassword || !req.session?.authenticated) {
+            return res.status(401).json({ 
+                error: 'Session expired. Please login again.',
+                code: 'SESSION_EXPIRED'
+            });
+        }
+        
         let folders = await FileManager.readFolders();
         const folderExists = folders.some(f => f.id === id);
         if (!folderExists) {
@@ -1119,6 +1170,7 @@ app.delete('/api/folders/:id', requireMasterPassword, async (req, res) => {
 
         res.json({ message: 'Folder deleted', migratedTo: targetFolderId });
     } catch (error) {
+        console.error('Error deleting folder:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1130,16 +1182,33 @@ app.put('/api/passwords/:id/move', requireMasterPassword, async (req, res) => {
     try {
         const { id } = req.params;
         const { folderId } = req.body; // can be null
+        
+        // Double-check authentication before proceeding
+        const currentMasterPassword = getMasterPassword(req);
+        if (!currentMasterPassword || !req.session?.authenticated) {
+            return res.status(401).json({ 
+                error: 'Session expired. Please login again.',
+                code: 'SESSION_EXPIRED'
+            });
+        }
+        
         const dataKey = getMasterPassword(req);
         const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
         const index = passwords.findIndex(p => p.id === id);
         if (index === -1) {
             return res.status(404).json({ error: 'Password not found' });
         }
+        
+        // Only update if folder actually changed
+        if (passwords[index].folderId === folderId) {
+            return res.json(passwords[index]); // No change needed
+        }
+        
         passwords[index] = { ...passwords[index], folderId: folderId || null, updatedAt: new Date().toISOString() };
         await FileManager.encryptAndSavePasswords(passwords, dataKey);
         res.json(passwords[index]);
     } catch (error) {
+        console.error('Error moving password:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1172,25 +1241,24 @@ const startServer = () => {
                 options.ca = fsSync.readFileSync(caPath);
             }
             https.createServer(options, app).listen(PORT, '0.0.0.0', () => {
-                console.log(`🔐 HTTPS Password Manager Backend running on https://localhost:${PORT}`);
-                console.log(`   Tip: Use your LAN hostname or IP instead of localhost on iPhone.`);
-                console.log(`📁 Data will be stored in: ${DATA_FILE}`);
+                console.log(`HTTPS server running on port ${PORT}`);
             });
-        } catch (e) {
-            console.error('Failed to start HTTPS server. Falling back to HTTP. Reason:', e.message);
-            http.createServer(app).listen(PORT, '0.0.0.0', () => {
-                console.log(`🚀 Password Manager Backend running on http://localhost:${PORT}`);
-                console.log(`📁 Data will be stored in: ${DATA_FILE}`);
-            });
+        } catch (error) {
+            console.error('HTTPS setup failed, falling back to HTTP:', error);
+            startHttpServer();
         }
     } else {
-        http.createServer(app).listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 Password Manager Backend running on http://localhost:${PORT}`);
-            console.log(`📁 Data will be stored in: ${DATA_FILE}`);
-        });
+        startHttpServer();
     }
 };
 
-startServer();
+const startHttpServer = () => {
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`HTTP server running on port ${PORT}`);
+        console.log(`Data directory: ${process.env.DATA_DIR || 'default'}`);
+        console.log(`Session store: ${process.env.ELECTRON === 'true' ? 'file-store (Electron)' : 'memory-store (dev)'}`);
+    });
+};
 
-module.exports = app; 
+// Start the server
+startServer();

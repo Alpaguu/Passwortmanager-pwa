@@ -6,6 +6,7 @@ process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
 
 const setDataDirectoryEnv = () => {
   try {
+    // For distributed app, use userData directory
     const userDataDir = path.join(app.getPath('userData'), 'data');
     process.env.DATA_DIR = userDataDir;
     
@@ -15,13 +16,19 @@ const setDataDirectoryEnv = () => {
       fs.mkdirSync(userDataDir, { recursive: true });
     }
     
-    // Ensure sessions subdirectory exists
+    // Ensure sessions subdirectory exists with proper permissions
     const sessionsDir = path.join(userDataDir, 'sessions');
     if (!fs.existsSync(sessionsDir)) {
-      fs.mkdirSync(sessionsDir, { recursive: true });
+      fs.mkdirSync(sessionsDir, { recursive: true, mode: 0o755 });
+    }
+    
+    // Also set SESSION_SECRET for distributed app
+    if (!process.env.SESSION_SECRET) {
+      process.env.SESSION_SECRET = 'distributed-app-secret-key-' + Date.now();
     }
     
     console.log('Data directory set to:', userDataDir);
+    console.log('Sessions directory:', sessionsDir);
   } catch (error) {
     console.error('Error setting up data directory:', error);
     // Fallback to server default

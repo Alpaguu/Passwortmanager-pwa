@@ -2063,6 +2063,20 @@
                     this.showNotification('Verschoben', 'success');
                     return;
                 }
+                
+                // Optimistic update for smoother UX
+                const currentPassword = this.passwords.find(p => p.id === id);
+                if (currentPassword && currentPassword.folderId === folderId) {
+                    return; // No change needed
+                }
+                
+                // Update UI immediately for smooth experience
+                const index = this.passwords.findIndex(p => p.id === id);
+                if (index !== -1) {
+                    this.passwords[index] = { ...this.passwords[index], folderId: folderId || null };
+                    this.renderPasswords(); // Update UI immediately
+                }
+                
                 try {
                     const response = await this.fetchWithAuthRetry(`${this.apiBase}/passwords/${id}/move`, {
                         method: 'PUT',
@@ -2080,16 +2094,29 @@
                             
                             // Show specific error message for authentication issues
                             this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                            
+                            // Revert optimistic update
+                            if (index !== -1 && currentPassword) {
+                                this.passwords[index] = { ...this.passwords[index], folderId: currentPassword.folderId };
+                                this.renderPasswords();
+                            }
+                            return;
                         }
                         const error = await response.json();
                         throw new Error(error.error);
                     }
+                    
+                    // Update with server response to ensure consistency
                     const updated = await response.json();
-                    const index = this.passwords.findIndex(p => p.id === id);
                     if (index !== -1) this.passwords[index] = updated;
                     this.renderPasswords();
                     this.showNotification('Verschoben', 'success');
                 } catch (error) {
+                    // Revert optimistic update on error
+                    if (index !== -1 && currentPassword) {
+                        this.passwords[index] = { ...this.passwords[index], folderId: currentPassword.folderId };
+                        this.renderPasswords();
+                    }
                     this.showNotification('Fehler beim Verschieben: ' + error.message, 'error');
                 }
             }
@@ -2459,6 +2486,7 @@
                             
                             // Show specific error message for authentication issues
                             this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                            return; // Don't throw error, just return
                         }
                         throw new Error('Ordner-Reihenfolge konnte nicht gespeichert werden');
                     }
@@ -2661,16 +2689,15 @@
                     this.folders = vault.folders;
                     return;
                 }
+                
+                // Optimistic update for smoother UX
+                const newFolder = { id: crypto.randomUUID(), name: String(name).trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+                this.folders.push(newFolder);
+                this.hydrateFolderSelects();
+                this.renderFoldersList(); // Update folder manager list
+                this.renderPasswords(); // Update main view with new folder chips
+                
                 try {
-                    const ok = await this.checkSessionStatus();
-                    if (!ok) {
-                        this.isAuthenticated = false;
-                        try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                        document.getElementById('mainContent').style.display = 'none';
-                        document.getElementById('headerActions').style.display = 'none';
-                        document.getElementById('loginScreen').style.display = 'block';
-                        throw new Error('Nicht angemeldet. Bitte erneut einloggen.');
-                    }
                     const res = await this.fetchWithAuthRetry(`${this.apiBase}/folders`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -2687,14 +2714,31 @@
                             
                             // Show specific error message for authentication issues
                             this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                            
+                            // Revert optimistic update
+                            this.folders = this.folders.filter(f => f.id !== newFolder.id);
+                            this.hydrateFolderSelects();
+                            this.renderPasswords();
+                            return;
                         }
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.error || 'Ordner konnte nicht erstellt werden');
                     }
-                    await this.loadFolders();
+                    
+                    // Update with server response to ensure consistency
+                    const serverFolder = await res.json();
+                    const index = this.folders.findIndex(f => f.id === newFolder.id);
+                    if (index !== -1) {
+                        this.folders[index] = serverFolder;
+                    }
+                    this.hydrateFolderSelects();
                     this.renderPasswords();
                     this.showNotification('Ordner erstellt', 'success');
                 } catch (error) {
+                    // Revert optimistic update on error
+                    this.folders = this.folders.filter(f => f.id !== newFolder.id);
+                    this.hydrateFolderSelects();
+                    this.renderPasswords();
                     this.showNotification(error.message, 'error');
                 }
             }
@@ -2720,16 +2764,22 @@
                 const input = document.querySelector(`input[data-folder-id='${id}']`);
                 const name = (input?.value || '').trim();
                 if (!name) return;
+                
+                // Optimistic update for smoother UX
+                const currentFolder = this.folders.find(f => f.id === id);
+                if (currentFolder && currentFolder.name === name) {
+                    return; // No change needed
+                }
+                
+                // Update UI immediately for smooth experience
+                const index = this.folders.findIndex(f => f.id === id);
+                if (index !== -1) {
+                    this.folders[index] = { ...this.folders[index], name: name };
+                    this.hydrateFolderSelects();
+                    this.renderPasswords();
+                }
+                
                 try {
-                    const ok = await this.checkSessionStatus();
-                    if (!ok) {
-                        this.isAuthenticated = false;
-                        try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                        document.getElementById('mainContent').style.display = 'none';
-                        document.getElementById('headerActions').style.display = 'none';
-                        document.getElementById('loginScreen').style.display = 'block';
-                        throw new Error('Nicht angemeldet. Bitte erneut einloggen.');
-                    }
                     const res = await this.fetchWithAuthRetry(`${this.apiBase}/folders/${id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
@@ -2746,15 +2796,34 @@
                             
                             // Show specific error message for authentication issues
                             this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                            
+                            // Revert optimistic update
+                            if (index !== -1 && currentFolder) {
+                                this.folders[index] = { ...this.folders[index], name: currentFolder.name };
+                                this.hydrateFolderSelects();
+                                this.renderPasswords();
+                            }
+                            return;
                         }
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.error || 'Ordner konnte nicht umbenannt werden');
                     }
-                    await this.loadFolders();
-                    this.renderFoldersList();
+                    
+                    // Update with server response to ensure consistency
+                    const updatedFolder = await res.json();
+                    if (index !== -1) {
+                        this.folders[index] = updatedFolder;
+                    }
+                    this.hydrateFolderSelects();
                     this.renderPasswords();
                     this.showNotification('Ordner umbenannt', 'success');
                 } catch (error) {
+                    // Revert optimistic update on error
+                    if (index !== -1 && currentFolder) {
+                        this.folders[index] = { ...this.folders[index], name: currentFolder.name };
+                        this.hydrateFolderSelects();
+                        this.renderPasswords();
+                    }
                     this.showNotification(error.message, 'error');
                 }
             }
@@ -2801,6 +2870,7 @@
                             
                             // Show specific error message for authentication issues
                             this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                            return; // Don't throw error, just return
                         }
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.error || 'Ordner konnte nicht gelöscht werden');
