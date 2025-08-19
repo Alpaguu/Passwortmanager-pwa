@@ -1,6 +1,12 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 
+// ⚡ Performance-Optimierungen
+app.commandLine.appendSwitch('--disable-background-timer-throttling');
+app.commandLine.appendSwitch('--disable-renderer-backgrounding');
+app.commandLine.appendSwitch('--disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('--disable-features', 'TranslateUI');
+
 process.env.ELECTRON = 'true';
 process.env.NODE_ENV = app.isPackaged ? 'production' : 'development';
 
@@ -80,8 +86,21 @@ const waitForServer = async (url, timeoutMs = 10000) => {
 };
 
 const startBackendServer = () => {
-  // Requiring starts the HTTP(S) server immediately
-  require(path.join(__dirname, 'server.js'));
+  try {
+    // Requiring starts the HTTP(S) server immediately
+    console.log('Starting backend server from:', path.join(__dirname, 'server.js'));
+    require(path.join(__dirname, 'server.js'));
+    console.log('Backend server started successfully');
+  } catch (error) {
+    console.error('Failed to start backend server:', error);
+    // Fallback: try to start with explicit path
+    try {
+      require('./server.js');
+      console.log('Backend server started with fallback path');
+    } catch (fallbackError) {
+      console.error('Fallback also failed:', fallbackError);
+    }
+  }
 };
 
 const createMainWindow = async () => {
@@ -92,20 +111,65 @@ const createMainWindow = async () => {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      webSecurity: false, // ⚡ Für lokale Dateien
     },
-    show: false,
+    show: true, // ⚡ Sofort anzeigen!
+    backgroundColor: '#ffffff',
+    // 🖱️ MODERNE macOS Titelleiste (bewegbar + schön)
+    titleBarStyle: 'hiddenInset', 
+    frame: true,
+    transparent: false,
+    minimizable: true,
+    maximizable: true,
+    closable: true,
+    // 🎯 Zusätzliche Drag-Optionen
+    movable: true,
+    resizable: true,
   });
 
+  // ⚡ SOFORT Splash Screen laden!
+  console.log('Loading splash screen immediately...');
+  await window.loadFile('splash.html');
+  console.log('Splash screen displayed instantly');
+  
+  // Nach 2 Sekunden zur Hauptapp wechseln
+  setTimeout(async () => {
+    await window.loadFile('index.html');
+    console.log('Main app loaded');
+  }, 2000);
+
+  // ⚡ Server im Hintergrund prüfen (non-blocking)
+  checkServerInBackground(window);
+  
+  return window;
+};
+
+const checkServerInBackground = async (window) => {
   const baseUrl = `http://localhost:${PORT}`;
-  const ready = await waitForServer(baseUrl, 15000);
-  await window.loadURL(ready ? baseUrl : `file://${path.join(__dirname, 'index.html')}`);
-  window.show();
+  console.log('Checking server in background:', baseUrl);
+  
+  // Nicht blockierend - prüfe ob Server verfügbar wird
+  const ready = await waitForServer(baseUrl, 5000);
+  
+  if (ready) {
+    console.log('Server ready - reloading with server URL');
+    window.loadURL(baseUrl);
+  } else {
+    console.log('Server not available - staying with local file');
+  }
 };
 
 const init = async () => {
   setDataDirectoryEnv();
+  
+  // ⚡ FENSTER SOFORT starten (nicht warten!)
+  const window = await createMainWindow();
+  
+  // ⚡ Server parallel im Hintergrund starten
   startBackendServer();
-  await createMainWindow();
+  
+  console.log('App initialized - window shown immediately');
+  return window;
 };
 
 const singleInstanceLock = app.requestSingleInstanceLock();

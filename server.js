@@ -15,6 +15,17 @@ const app = express();
 const PORT = Number(process.env.PORT) || 57321;
 const ENCRYPTION_SCHEME = 'dataKey-v1';
 
+// Rate limiting for large requests
+const rateLimit = require('express-rate-limit');
+
+const largeDataLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 10, // limit each IP to 10 requests per windowMs for large data endpoints
+    message: 'Too many requests for large data, please try again later',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // Middleware
 app.use(cors({
     origin: true,
@@ -73,11 +84,18 @@ app.use(session({
     }
 }));
 
+// Ensure sessions directory exists
+const sessionsDir = path.join(__dirname, 'data', 'sessions');
+if (!fsSync.existsSync(sessionsDir)) {
+    fsSync.mkdirSync(sessionsDir, { recursive: true });
+    console.log('Created sessions directory:', sessionsDir);
+}
+
 // Global variables
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'passwords.json');
 const MASTER_PASSWORDS_FILE = path.join(DATA_DIR, 'master_passwords.json');
-const FOLDERS_FILE = path.join(__dirname, 'folders.json');
+const FOLDERS_FILE = path.join(DATA_DIR, 'folders.json');
 
 // Performance-Optimierung: Memory-Cache für Passwörter
 const passwordCache = new Map();
@@ -470,39 +488,117 @@ class FileManager {
             const data = await fs.readFile(FOLDERS_FILE, 'utf8');
             const parsed = JSON.parse(data);
             const folders = Array.isArray(parsed) ? parsed : [];
+            
+            // Validate and clean folder objects
+            const validFolders = folders.filter(f => {
+                return f && 
+                       typeof f === 'object' && 
+                       typeof f.id === 'string' && 
+                       f.id.trim().length > 0 &&
+                       typeof f.name === 'string' && 
+                       f.name.trim().length > 0;
+            });
+            
             // Deduplicate by normalized name (first wins)
             const seen = new Set();
             const unique = [];
-            for (const f of folders) {
+            for (const f of validFolders) {
                 const key = String(f.name || '').trim().toLowerCase();
                 if (seen.has(key)) continue;
                 seen.add(key);
                 unique.push(f);
             }
-            if (unique.length !== folders.length) {
-                await this.writeFolders(unique).catch(() => {});
+            
+            // Ensure all folders have required fields
+            const normalizedFolders = unique.map(f => ({
+                id: f.id.trim(),
+                name: String(f.name).trim(),
+                order: typeof f.order === 'number' ? f.order : 0,
+                createdAt: f.createdAt || new Date().toISOString(),
+                updatedAt: f.updatedAt || new Date().toISOString()
+            }));
+            
+            // Sort by order
+            normalizedFolders.sort((a, b) => a.order - b.order);
+            
+            // Update order indices to be sequential
+            normalizedFolders.forEach((folder, index) => {
+                folder.order = index;
+            });
+            
+            // Save normalized data if changes were made
+            if (JSON.stringify(normalizedFolders) !== JSON.stringify(folders)) {
+                await this.writeFolders(normalizedFolders).catch(() => {});
             }
-            return unique;
+            
+            return normalizedFolders;
         } catch (error) {
             if (error.code === 'ENOENT') {
+                // File doesn't exist, create empty folders file
+                await this.writeFolders([]).catch(() => {});
                 return [];
             }
-            throw error;
+            console.error('Error reading folders:', error);
+            // Return empty array on error, but try to create the file
+            try {
+                await this.writeFolders([]);
+            } catch (writeError) {
+                console.error('Error creating empty folders file:', writeError);
+            }
+            return [];
         }
     }
 
     static async writeFolders(folders) {
-        await this.ensureDataDirectory();
-        const arr = Array.isArray(folders) ? folders : [];
-        const seen = new Set();
-        const unique = [];
-        for (const f of arr) {
-            const key = String(f.name || '').trim().toLowerCase();
-            if (seen.has(key)) continue;
-            seen.add(key);
-            unique.push(f);
+        try {
+            await this.ensureDataDirectory();
+            const arr = Array.isArray(folders) ? folders : [];
+            
+            // Validate and clean folder objects before writing
+            const validFolders = arr.filter(f => {
+                return f && 
+                       typeof f === 'object' && 
+                       typeof f.id === 'string' && 
+                       f.id.trim().length > 0 &&
+                       typeof f.name === 'string' && 
+                       f.name.trim().length > 0;
+            });
+            
+            // Deduplicate by normalized name (first wins)
+            const seen = new Set();
+            const unique = [];
+            for (const f of validFolders) {
+                const key = String(f.name || '').trim().toLowerCase();
+                if (seen.has(key)) continue;
+                seen.add(key);
+                unique.push(f);
+            }
+            
+            // Ensure all folders have required fields
+            const normalizedFolders = unique.map(f => ({
+                id: f.id.trim(),
+                name: String(f.name).trim(),
+                order: typeof f.order === 'number' ? f.order : 0,
+                createdAt: f.createdAt || new Date().toISOString(),
+                updatedAt: f.updatedAt || new Date().toISOString()
+            }));
+            
+            // Sort by order
+            normalizedFolders.sort((a, b) => a.order - b.order);
+            
+            // Update order indices to be sequential
+            normalizedFolders.forEach((folder, index) => {
+                folder.order = index;
+            });
+            
+            // Write to file
+            await fs.writeFile(FOLDERS_FILE, JSON.stringify(normalizedFolders, null, 2));
+            
+            return normalizedFolders;
+        } catch (error) {
+            console.error('Error writing folders:', error);
+            throw error;
         }
-        await fs.writeFile(FOLDERS_FILE, JSON.stringify(unique, null, 2));
     }
 
     static async loadMasterPasswords() {
@@ -959,43 +1055,71 @@ class FileManager {
 
     // Optimierte Version mit Cache
     static async loadAndDecryptPasswordsCached(keyString) {
-        // Versuche Cache zu verwenden
-        const cached = getCachedPasswords(keyString);
-        if (cached) {
-            return cached;
-        }
-        
-        // Cache miss - lade und entschlüssele
-        const encryptedPasswords = await this.readPasswords();
-        
-        if (!keyString) {
-            throw new Error('Master password not set');
-        }
-
-        const decryptedPasswords = encryptedPasswords.map(pwd => {
-            try {
-                // Use stored salt for decryption
-                const salt = Buffer.from(pwd.passwordSalt || pwd.usernameSalt || '00000000000000000000000000000000', 'hex');
-                const key = EncryptionManager.deriveKey(keyString, salt);
-                
-                return {
-                    ...pwd,
-                    password: EncryptionManager.decrypt({ encrypted: pwd.password, iv: pwd.passwordIv }, key),
-                    username: EncryptionManager.decrypt({ encrypted: pwd.username, iv: pwd.usernameIv }, key)
-                };
-            } catch (error) {
-                console.error('Error decrypting password:', error);
-                throw new Error('Decryption failed - wrong master password');
+        try {
+            // Versuche Cache zu verwenden
+            const cached = getCachedPasswords(keyString);
+            if (cached) {
+                console.log(`Cache hit: returning ${cached.length} cached passwords`);
+                return cached;
             }
-        });
-        
-        // Cache setzen
-        setCachedPasswords(keyString, decryptedPasswords);
-        
-        // Index für Suche aufbauen
-        buildSearchIndex(decryptedPasswords, keyString);
-        
-        return decryptedPasswords;
+            
+            console.log('Cache miss: loading and decrypting passwords...');
+            
+            // Cache miss - lade und entschlüssele
+            const encryptedPasswords = await this.readPasswords();
+            console.log(`Loaded ${encryptedPasswords.length} encrypted passwords`);
+            
+            if (!keyString) {
+                throw new Error('Master password not set');
+            }
+
+            // Process passwords in batches to avoid memory issues
+            const batchSize = 100; // Increased batch size for better performance
+            const decryptedPasswords = [];
+            
+            console.log(`Starting batch processing of ${encryptedPasswords.length} passwords with batch size ${batchSize}`);
+            
+            for (let i = 0; i < encryptedPasswords.length; i += batchSize) {
+                const batch = encryptedPasswords.slice(i, i + batchSize);
+                const batchNumber = Math.floor(i/batchSize) + 1;
+                const totalBatches = Math.ceil(encryptedPasswords.length/batchSize);
+                
+                console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} passwords)`);
+                
+                const decryptedBatch = batch.map((pwd, index) => {
+                    try {
+                        // Use stored salt for decryption
+                        const salt = Buffer.from(pwd.passwordSalt || pwd.usernameSalt || '00000000000000000000000000000000', 'hex');
+                        const key = EncryptionManager.deriveKey(keyString, salt);
+                        
+                        return {
+                            ...pwd,
+                            password: EncryptionManager.decrypt({ encrypted: pwd.password, iv: pwd.passwordIv }, key),
+                            username: EncryptionManager.decrypt({ encrypted: pwd.username, iv: pwd.usernameIv }, key)
+                        };
+                    } catch (error) {
+                        console.error(`Error decrypting password ${index + 1} in batch ${batchNumber}:`, error);
+                        throw new Error(`Decryption failed for password ${index + 1} in batch ${batchNumber}: ${error.message}`);
+                    }
+                });
+                
+                decryptedPasswords.push(...decryptedBatch);
+                console.log(`Completed batch ${batchNumber}/${totalBatches}`);
+            }
+            
+            console.log(`Successfully decrypted ${decryptedPasswords.length} passwords`);
+            
+            // Cache setzen
+            setCachedPasswords(keyString, decryptedPasswords);
+            
+            // Index für Suche aufbauen
+            buildSearchIndex(decryptedPasswords, keyString);
+            
+            return decryptedPasswords;
+        } catch (error) {
+            console.error('Error in loadAndDecryptPasswordsCached:', error);
+            throw error;
+        }
     }
 
     // Optimierte Suche mit Index
@@ -1096,6 +1220,75 @@ class FileManager {
                 hasPrevPage: currentPage > 1
             }
         };
+    }
+
+    static async updatePasswordFolderIds(oldFolderId, newFolderId) {
+        try {
+            const passwords = await this.readPasswords();
+            let updatedCount = 0;
+            
+            // Debug: Log what we're looking for
+            console.log(`Looking for passwords with folderId "${oldFolderId}" to move to "${newFolderId || 'null'}"`);
+            console.log(`Total passwords found: ${passwords.length}`);
+            
+            // Log all passwords for debugging
+            passwords.forEach(p => {
+                console.log(`Password ${p.id}: folderId="${p.folderId}" (type: ${typeof p.folderId})`);
+            });
+            
+            const updated = passwords.map(p => {
+                // Handle null/undefined folderId correctly
+                if (p.folderId === oldFolderId || (p.folderId === null && oldFolderId === null) || (p.folderId === undefined && oldFolderId === undefined)) {
+                    updatedCount++;
+                    console.log(`MATCH FOUND! Moving password ${p.id} from folder ${oldFolderId} to ${newFolderId || 'null'}`);
+                    return { ...p, folderId: newFolderId, updatedAt: new Date().toISOString() };
+                }
+                return p;
+            });
+            
+            if (updatedCount > 0) {
+                await this.writePasswords(updated);
+                // Clear all caches to ensure consistency
+                clearAllCaches();
+                console.log(`Updated ${updatedCount} passwords from folder ${oldFolderId} to ${newFolderId || 'null'}`);
+            } else {
+                console.log(`No passwords found with folderId "${oldFolderId}"`);
+            }
+            
+            return updatedCount;
+        } catch (error) {
+            console.error('Error updating password folder IDs:', error);
+            throw error;
+        }
+    }
+
+    static async cleanupOrphanedPasswordFolders() {
+        try {
+            const passwords = await this.readPasswords();
+            const folders = await this.readFolders();
+            const validFolderIds = new Set(folders.map(f => f.id));
+            
+            let cleanedCount = 0;
+            const cleaned = passwords.map(p => {
+                // If password has a folderId but that folder doesn't exist, set to null
+                if (p.folderId && !validFolderIds.has(p.folderId)) {
+                    cleanedCount++;
+                    return { ...p, folderId: null, updatedAt: new Date().toISOString() };
+                }
+                return p;
+            });
+            
+            if (cleanedCount > 0) {
+                await this.writePasswords(cleaned);
+                clearAllCaches();
+                console.log(`Cleaned up ${cleanedCount} orphaned password folder references`);
+            }
+            
+            return cleanedCount;
+        } catch (error) {
+            console.error('Error cleaning up orphaned password folders:', error);
+            throw error;
+        }
     }
 }
 
@@ -1246,7 +1439,12 @@ app.delete('/api/remove-master-password/:id', async (req, res) => {
 app.get('/api/master-passwords', async (req, res) => {
     try {
         const masterPasswords = await FileManager.getMasterPasswords();
-        res.json(masterPasswords);
+        
+        // Fix for ERR_CONTENT_LENGTH_MISMATCH with large JSON responses
+        const jsonString = JSON.stringify(masterPasswords);
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Length', Buffer.byteLength(jsonString, 'utf8'));
+        res.end(jsonString);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1371,12 +1569,33 @@ app.get('/api/all', requireMasterPassword, async (req, res) => {
     const startTime = Date.now();
     try {
         const dataKey = getMasterPassword(req); // now stores DataKey
+        
+        // Set timeout and headers for large responses
+        res.setTimeout(60000); // 60 seconds timeout for large datasets
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Cache-Control', 'no-cache');
+        
+        console.log(`Starting to load passwords for dataKey: ${dataKey ? 'set' : 'not set'}`);
+        
         const passwords = await FileManager.loadAndDecryptPasswordsCached(dataKey);
+        
+        // Log response size for debugging
+        const responseSize = JSON.stringify(passwords).length;
+        console.log(`Successfully loaded ${passwords.length} passwords, response size: ${responseSize} bytes`);
+        
         trackOperation('getAllPasswords', startTime);
-        res.json(passwords);
+        
+        // Ensure response is sent properly
+        res.status(200).json(passwords);
+        
     } catch (error) {
         trackOperation('getAllPasswords_error', startTime);
-        res.status(500).json({ error: error.message });
+        console.error('Error in /api/all:', error);
+        
+        // Ensure error response is sent
+        if (!res.headersSent) {
+            res.status(500).json({ error: error.message });
+        }
     }
 });
 
@@ -1407,7 +1626,7 @@ app.get('/api/search', requireMasterPassword, async (req, res) => {
 });
 
 // Paginierte Passwort-Liste für große Datenmengen
-app.get('/api/passwords', requireMasterPassword, async (req, res) => {
+app.get('/api/passwords', largeDataLimiter, requireMasterPassword, async (req, res) => {
     try {
         const { page = 1, pageSize = 50, sortBy = 'title', sortOrder = 'asc' } = req.query;
         const dataKey = getMasterPassword(req);
@@ -1427,7 +1646,11 @@ app.get('/api/passwords', requireMasterPassword, async (req, res) => {
             sortOrder
         );
         
-        res.json(result);
+        // Fix for ERR_CONTENT_LENGTH_MISMATCH with large JSON responses
+        const jsonString = JSON.stringify(result);
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Length', Buffer.byteLength(jsonString, 'utf8'));
+        res.end(jsonString);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1706,9 +1929,12 @@ app.get('/api/export', requireMasterPassword, async (req, res) => {
             folders: sortedFolders
         };
         
+        // Fix for ERR_CONTENT_LENGTH_MISMATCH with large JSON responses
+        const jsonString = JSON.stringify(exportData);
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Content-Disposition', `attachment; filename="passwords_backup_${new Date().toISOString().split('T')[0]}.json"`);
-        res.json(exportData);
+        res.setHeader('Content-Length', Buffer.byteLength(jsonString, 'utf8'));
+        res.end(jsonString);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1767,13 +1993,41 @@ app.post('/api/import', requireMasterPassword, async (req, res) => {
             }
         }
 
+        // Build a folderId remap so passwords keep correct folder assignment
+        // even if imported folders were de-duplicated by name and got new IDs.
+        const folderIdRemap = new Map();
+        try {
+            const finalFolders = await FileManager.readFolders();
+            const nameToFinalId = new Map(finalFolders.map(f => [String(f.name || '').toLowerCase().trim(), f.id]));
+
+            if (folders && Array.isArray(folders)) {
+                for (const f of folders) {
+                    const nameKey = String(f?.name || '').toLowerCase().trim();
+                    if (!nameKey) continue;
+                    const finalId = nameToFinalId.get(nameKey);
+                    if (finalId && f.id && f.id !== finalId) {
+                        folderIdRemap.set(f.id, finalId);
+                    }
+                }
+            }
+        } catch (_) {
+            // Non-fatal: if anything goes wrong, we just skip remapping
+        }
+
         // Add IDs to imported passwords if missing
-        const processedPasswords = passwords.map(pwd => ({
-            ...pwd,
-            id: pwd.id || uuidv4(),
-            createdAt: pwd.createdAt || new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        }));
+        const processedPasswords = passwords.map(pwd => {
+            const mappedFolderId = (pwd.folderId && folderIdRemap.has(pwd.folderId))
+                ? folderIdRemap.get(pwd.folderId)
+                : pwd.folderId;
+
+            return {
+                ...pwd,
+                id: pwd.id || uuidv4(),
+                folderId: typeof mappedFolderId === 'string' ? mappedFolderId : (mappedFolderId ?? null),
+                createdAt: pwd.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+        });
 
         const dataKey = getMasterPassword(req);
         await FileManager.encryptAndSavePasswords(processedPasswords, dataKey);
@@ -1784,7 +2038,11 @@ app.post('/api/import', requireMasterPassword, async (req, res) => {
             foldersCount: folders && Array.isArray(folders) ? folders.length : 0
         };
         
-        res.json(importResult);
+        // Fix for ERR_CONTENT_LENGTH_MISMATCH with large JSON responses
+        const jsonString = JSON.stringify(importResult);
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Length', Buffer.byteLength(jsonString, 'utf8'));
+        res.end(jsonString);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1957,10 +2215,21 @@ app.get('/', (req, res) => {
 
 // Folder management endpoints
 // Get all folders
-app.get('/api/folders', requireMasterPassword, async (req, res) => {
+app.get('/api/folders', largeDataLimiter, requireMasterPassword, async (req, res) => {
     try {
         const folders = await FileManager.readFolders();
-        res.json(folders);
+        
+        // Fix for ERR_CONTENT_LENGTH_MISMATCH with large JSON responses
+        const jsonString = JSON.stringify(folders);
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Length', Buffer.byteLength(jsonString, 'utf8'));
+        
+        // Handle client disconnect gracefully
+        req.on('close', () => {
+            console.log('Client disconnected from /api/folders');
+        });
+        
+        res.end(jsonString);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -2134,25 +2403,39 @@ app.delete('/api/folders/:id', requireMasterPassword, async (req, res) => {
         // Reassign passwords to the target folder (or null for "no folder")
         try {
             const dataKey = getMasterPassword(req);
-            const passwords = await FileManager.loadAndDecryptPasswords(dataKey);
             
-            // Always move passwords to "no folder" (null) when deleting a folder
-            const targetFolderId = null;
-            const updated = passwords.map(p => {
-                if (p.folderId === id) {
-                    return { ...p, folderId: targetFolderId, updatedAt: new Date().toISOString() };
-                }
-                return p;
+            // Use the new method to update passwords directly without decryption
+            const movedCount = await FileManager.updatePasswordFolderIds(id, null);
+            
+            if (movedCount > 0) {
+                console.log(`Moved ${movedCount} passwords to "no folder"`);
+            }
+            
+            // ADDITIONAL CLEANUP: Ensure no passwords reference deleted folders
+            try {
+                await FileManager.cleanupOrphanedPasswordFolders();
+            } catch (cleanupError) {
+                console.warn('Error during orphaned folder cleanup:', cleanupError);
+            }
+            
+            // Return information about moved passwords
+            res.json({ 
+                message: 'Folder deleted', 
+                migratedTo: migrateTo === 'null' || !migrateTo ? null : String(migrateTo),
+                movedPasswords: movedCount,
+                movedToFolderId: null
             });
-            
-            await FileManager.encryptAndSavePasswords(updated, dataKey);
-            console.log(`Moved ${updated.filter(p => p.folderId === null && p.folderId !== p.folderId).length} passwords to "no folder"`);
         } catch (passwordError) {
             console.error('Error reassigning passwords during folder deletion:', passwordError);
             // Continue with folder deletion even if password reassignment fails
+            res.json({ 
+                message: 'Folder deleted', 
+                migratedTo: migrateTo === 'null' || !migrateTo ? null : String(migrateTo),
+                movedPasswords: 0,
+                movedToFolderId: null,
+                warning: 'Passwords could not be reassigned'
+            });
         }
-
-        res.json({ message: 'Folder deleted', migratedTo: migrateTo === 'null' || !migrateTo ? null : String(migrateTo) });
     } catch (error) {
         console.error('Error deleting folder:', error);
         res.status(500).json({ error: 'Internal server error during folder deletion' });
@@ -2195,7 +2478,8 @@ app.put('/api/passwords/:id/move', requireMasterPassword, async (req, res) => {
         
         // Aktualisiere nur das folderId Feld
         passwords[index] = { ...passwords[index], folderId: folderId || null, updatedAt: new Date().toISOString() };
-        await FileManager.writePasswords(passwords);
+        // WICHTIG: Cache invalidieren, damit /api/all sofort aktualisierte Daten liefert
+        await FileManager.writePasswordsCached(passwords, dataKey);
         
         // Entschlüssele für die Antwort
         const decryptedPasswords = await FileManager.loadAndDecryptPasswords(dataKey);
@@ -2294,7 +2578,23 @@ const startHttpServer = () => {
 };
 
 // Start the server
-startServer();
+const initializeServer = async () => {
+    try {
+        // Clean up folders on startup
+        console.log('Initializing server and cleaning up folders...');
+        const folders = await FileManager.readFolders();
+        console.log(`Found ${folders.length} folders, cleaned up and normalized.`);
+        
+        // Start the server
+        startServer();
+    } catch (error) {
+        console.error('Error during server initialization:', error);
+        // Start server anyway
+        startServer();
+    }
+};
+
+initializeServer();
 
 // Performance-Statistiken
 app.get('/api/performance', requireMasterPassword, async (req, res) => {
@@ -2322,6 +2622,21 @@ app.post('/api/performance/reset-cache', requireMasterPassword, async (req, res)
             timestamp: new Date().toISOString()
         });
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Cleanup orphaned password folder references
+app.post('/api/cleanup-orphaned-folders', requireMasterPassword, async (req, res) => {
+    try {
+        const cleanedCount = await FileManager.cleanupOrphanedPasswordFolders();
+        res.json({ 
+            message: `Cleaned up ${cleanedCount} orphaned password folder references`,
+            cleanedCount,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('Error in cleanup-orphaned-folders:', error);
         res.status(500).json({ error: error.message });
     }
 });

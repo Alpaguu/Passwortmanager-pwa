@@ -39,6 +39,22 @@
             padding: 60px 24px 40px;
             text-align: center;
             position: relative;
+            -webkit-app-region: drag; /* 🖱️ Macht Header bewegbar */
+        }
+
+        .app-version {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            background: #f3f4f6;
+            color: #6b7280;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            z-index: 1000;
+            font-variant-numeric: tabular-nums;
+            -webkit-app-region: no-drag; /* 🚫 Version-Badge nicht drag-bar */
         }
 
         .header h1 {
@@ -92,6 +108,12 @@
             outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* 🖱️ Alle interaktiven Elemente nicht drag-bar machen */
+        button, input, select, textarea, .btn, [role="button"], .close, 
+        .modal-content, .notification {
+            -webkit-app-region: no-drag;
         }
 
         /* Modal select styling (folder dropdown) same as entry select */
@@ -691,6 +713,28 @@
             color: #111827;
         }
 
+        /* Special styling for notes field */
+        .password-field.full .value {
+            align-items: flex-start;
+            min-height: 60px;
+        }
+
+        .password-field.full .value textarea {
+            background: transparent;
+            border: none;
+            font-family: inherit;
+            font-size: 14px;
+            width: 100%;
+            outline: none;
+            color: #111827;
+            resize: none;
+            min-height: 60px;
+            max-height: 200px;
+            overflow-y: auto;
+            line-height: 1.5;
+            padding: 0;
+        }
+
         .copy-btn {
             background: #1a1a1a;
             color: white;
@@ -774,6 +818,7 @@
             justify-content: center;
             border-radius: 6px;
             transition: all 0.15s ease;
+            -webkit-app-region: no-drag; /* 🖱️ X-Button muss klickbar sein! */
         }
 
         .close:hover {
@@ -1017,6 +1062,7 @@
             font-weight: 500;
             transition: all 0.15s ease;
             min-width: 40px;
+            -webkit-app-region: no-drag; /* 🚫 Buttons nicht drag-bar */
         }
 
         .pagination button:hover:not(:disabled) {
@@ -1043,6 +1089,9 @@
     </style>
 </head>
 <body>
+    <!-- App Version Display -->
+    <div class="app-version" id="appVersion">v1.8.7</div>
+    
     <!-- Initial Loading Screen -->
     <div class="initial-loading" id="initialLoading">
         <div class="loading-content">
@@ -1452,16 +1501,11 @@
 
             async ensureMode() {
                 if (this.modeChecked) return;
-                try {
-                    const controller = new AbortController();
-                    const t = setTimeout(() => controller.abort(), 800);
-                    const res = await fetch(`${this.apiBase.replace(/\/api$/, '')}/api/health`, { signal: controller.signal, credentials: 'include' });
-                    clearTimeout(t);
-                    if (!res.ok) throw new Error('bad');
-                    this.localMode = false;
-                } catch (_) {
-                    this.localMode = true;
-                }
+                
+                // Force LOCAL mode for now to avoid server authentication issues
+                this.localMode = true;
+                console.log('🔧 Forced LOCAL mode - using browser localStorage');
+                
                 this.modeChecked = true;
             }
 
@@ -1545,7 +1589,7 @@
                             createBtn.disabled = true;
                             await passwordManager.createFolder(name);
                             input.value = '';
-                            passwordManager.renderFoldersList();
+                            // No need to call renderFoldersList() here as createFolder() already handles UI updates
                         } finally {
                             createBtn.disabled = false;
                             delete createBtn.dataset.loading;
@@ -1667,7 +1711,7 @@
                     const data = await response.json();
                     
                     // Log session info for debugging
-                    if (process.env.NODE_ENV === 'development') {
+                    if (typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'development') {
                         console.log('Session status:', data);
                     }
                     
@@ -1921,13 +1965,16 @@
                 }
             }
 
-            async loadPasswords() {
+            async loadPasswords(retryCount = 0) {
                 try {
+                    console.log(`loadPasswords called (attempt ${retryCount + 1})`);
                     await this.ensureMode();
+                    
                     if (this.localMode) {
                         if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
                         const vault = await LocalMode.loadVault(this.dataKeyHex);
                         this.passwords = Array.isArray(vault.passwords) ? vault.passwords : [];
+                        console.log('Local mode passwords loaded:', this.passwords.length);
                         this.renderPasswords();
                         return;
                     }
@@ -1936,31 +1983,73 @@
                         throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
                     }
 
-                    const response = await fetch(`${this.apiBase}/all`, {
-                        credentials: 'include'
-                    });
+                    // Add timeout and better error handling
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
                     
-                    if (!response.ok) {
-                        if (response.status === 401) {
-                            this.isAuthenticated = false;
-                            try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
-                            document.getElementById('mainContent').style.display = 'none';
-                            document.getElementById('headerActions').style.display = 'none';
-                            document.getElementById('loginScreen').style.display = 'block';
+                    try {
+                        const response = await fetch(`${this.apiBase}/all`, {
+                            credentials: 'include',
+                            signal: controller.signal
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (!response.ok) {
+                            if (response.status === 401) {
+                                this.isAuthenticated = false;
+                                try { await fetch(`${this.apiBase}/logout`, { method: 'POST', credentials: 'include' }); } catch (_) {}
+                                document.getElementById('mainContent').style.display = 'none';
+                                document.getElementById('headerActions').style.display = 'none';
+                                document.getElementById('loginScreen').style.display = 'block';
+                                
+                                this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
+                                return;
+                            }
                             
-                            // Show specific error message for authentication issues
-                            this.showNotification('Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'error');
-                            return; // Don't throw error, just return
+                            const error = await response.json();
+                            throw new Error(error.error);
+                        }
+
+                        // Check if response is valid JSON
+                        const text = await response.text();
+                        if (!text || text.trim() === '') {
+                            throw new Error('Leere Antwort vom Server erhalten');
                         }
                         
-                        const error = await response.json();
-                        throw new Error(error.error);
+                        try {
+                            this.passwords = JSON.parse(text);
+                        } catch (parseError) {
+                            console.error('JSON parse error:', parseError, 'Response text:', text.substring(0, 200));
+                            throw new Error('Ungültige JSON-Antwort vom Server');
+                        }
+                        
+                        console.log('Server mode passwords loaded:', this.passwords.length);
+                        console.log('Password folder distribution:', this.passwords.reduce((acc, p) => {
+                            const folderId = p.folderId || 'null';
+                            acc[folderId] = (acc[folderId] || 0) + 1;
+                            return acc;
+                        }, {}));
+                        
+                        this.renderPasswords();
+                    } catch (fetchError) {
+                        clearTimeout(timeoutId);
+                        throw fetchError;
                     }
-
-                    this.passwords = await response.json();
-                    this.renderPasswords();
                 } catch (error) {
                     console.error('Error loading passwords:', error);
+                    
+                    // Retry logic for network errors
+                    if (retryCount < 2 && (error.name === 'AbortError' || error.message.includes('Failed to fetch'))) {
+                        console.log(`Retrying loadPasswords in 2 seconds... (attempt ${retryCount + 1})`);
+                        this.showNotification(`Lade Passwörter erneut... (Versuch ${retryCount + 1}/3)`, 'info');
+                        
+                        setTimeout(() => {
+                            this.loadPasswords(retryCount + 1);
+                        }, 2000);
+                        return;
+                    }
+                    
                     this.showNotification('Fehler beim Laden der Passwörter: ' + error.message, 'error');
                     this.renderPasswords([]);
                 }
@@ -1968,14 +2057,25 @@
 
             async loadFolders() {
                 try {
+                    console.log('loadFolders called');
                     await this.ensureMode();
                     if (this.localMode) {
                         const vault = this.dataKeyHex ? await LocalMode.loadVault(this.dataKeyHex) : { folders: [] };
                         let folders = Array.isArray(vault.folders) ? vault.folders : [];
                         
+                        // Validate and clean folder objects
+                        const validFolders = folders.filter(f => {
+                            return f && 
+                                   typeof f === 'object' && 
+                                   typeof f.id === 'string' && 
+                                   f.id.trim().length > 0 &&
+                                   typeof f.name === 'string' && 
+                                   f.name.trim().length > 0;
+                        });
+                        
                         // Migrate existing folders without order index
                         let needsMigration = false;
-                        folders.forEach((folder, index) => {
+                        validFolders.forEach((folder, index) => {
                             if (typeof folder.order !== 'number') {
                                 folder.order = index;
                                 folder.updatedAt = new Date().toISOString();
@@ -1984,19 +2084,20 @@
                         });
                         
                         // Save migrated data if needed
-                        if (needsMigration) {
-                            vault.folders = folders;
+                        if (needsMigration || validFolders.length !== folders.length) {
+                            vault.folders = validFolders;
                             await LocalMode.saveVault(this.dataKeyHex, vault);
                         }
                         
                         // Sort folders by order index
-                        folders.sort((a, b) => {
+                        validFolders.sort((a, b) => {
                             const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
                             const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
                             return orderA - orderB;
                         });
                         
-                        this.folders = folders;
+                        this.folders = validFolders;
+                        console.log('Local mode folders loaded:', this.folders);
                         this.hydrateFolderSelects();
                         return;
                     }
@@ -2017,13 +2118,32 @@
                         throw new Error('Fehler beim Laden der Ordner');
                     }
                     const folders = await response.json();
+                    
+                    // Validate and clean folder objects from server
+                    const validFolders = Array.isArray(folders) ? folders.filter(f => {
+                        return f && 
+                               typeof f === 'object' && 
+                               typeof f.id === 'string' && 
+                               f.id.trim().length > 0 &&
+                               typeof f.name === 'string' && 
+                               f.name.trim().length > 0;
+                    }) : [];
+                    
                     // Sort folders by order index
-                    this.folders = folders.sort((a, b) => {
+                    this.folders = validFolders.sort((a, b) => {
                         const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
                         const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
                         return orderA - orderB;
                     });
+                    
+                    console.log('Server mode folders loaded:', this.folders);
                     this.hydrateFolderSelects();
+                    
+                    // IMPORTANT: If passwords are already loaded, re-render them to show folder chips
+                    if (this.passwords && this.passwords.length > 0) {
+                        console.log('Re-rendering passwords after folders loaded to show folder chips');
+                        this.renderPasswords();
+                    }
                 } catch (error) {
                     console.error('Error loading folders:', error);
                     this.folders = [];
@@ -2033,6 +2153,8 @@
 
             hydrateFolderSelects() {
                 try {
+                    console.log('hydrateFolderSelects called with folders:', this.folders);
+                    
                     // Cache folder options for better performance
                     if (!this._folderOptionsCache || this._folderOptionsCache.foldersLength !== this.folders.length) {
                         this._buildFolderOptionsCache();
@@ -2043,12 +2165,14 @@
                     if (filterSelect) {
                         filterSelect.innerHTML = this._folderOptionsCache.filterOptions;
                         filterSelect.value = this.selectedFolderId || 'all';
+                        console.log('Updated filter select with value:', filterSelect.value);
                     }
                     
                     // Modal select for password
                     const pwdSelect = document.getElementById('passwordFolder');
                     if (pwdSelect) {
                         pwdSelect.innerHTML = this._folderOptionsCache.modalOptions;
+                        console.log('Updated modal select');
                     }
 
                     // Drag & Drop folder bar
@@ -2057,7 +2181,10 @@
                         dndBar.innerHTML = this._folderOptionsCache.dndOptions;
                         this.setupFolderDropTargets();
                         this.setupFolderReorder();
+                        console.log('Updated DnD bar');
                     }
+                    
+                    console.log('✅ hydrateFolderSelects completed successfully');
                 } catch (error) {
                     console.error('Error in hydrateFolderSelects:', error);
                 }
@@ -2066,6 +2193,8 @@
             // Build and cache folder options for better performance
             _buildFolderOptionsCache() {
                 try {
+                    console.log('Building folder options cache with folders:', this.folders);
+                    
                     const seen = new Set();
                     const uniqueFolders = this.folders.filter(f => {
                         const key = String(f.name || '').trim().toLowerCase();
@@ -2092,6 +2221,13 @@
                         dndOptions,
                         foldersLength: this.folders.length
                     };
+                    
+                    console.log('✅ Folder options cache built successfully:', {
+                        filterOptions: filterOptions.length,
+                        modalOptions: modalOptions.length,
+                        dndOptions: dndOptions.length,
+                        foldersLength: this.folders.length
+                    });
                 } catch (error) {
                     console.error('Error in _buildFolderOptionsCache:', error);
                 }
@@ -2105,6 +2241,28 @@
                     this._collator = null;
                 } catch (error) {
                     console.error('Error clearing caches:', error);
+                }
+            }
+
+            // Clear all caches including server-side caches
+            _clearAllCaches() {
+                try {
+                    // Clear local caches
+                    this._clearCaches();
+                    
+                    // Clear any other cached data
+                    if (this._searchCache) {
+                        this._searchCache.clear();
+                    }
+                    
+                    // Force garbage collection hint (optional)
+                    if (window.gc) {
+                        window.gc();
+                    }
+                    
+                    console.log('✅ All caches cleared');
+                } catch (error) {
+                    console.error('Error clearing all caches:', error);
                 }
             }
 
@@ -2128,7 +2286,21 @@
                         return;
                     }
                     
-                    console.log('Background folder deletion successful');
+                    const result = await res.json();
+                    console.log('Background folder deletion successful:', result);
+                    
+                    // Always reload data to ensure consistency with server
+                    console.log(`Reloading data after folder deletion (${result.movedPasswords || 0} passwords moved)`);
+                    try {
+                        // Clear all caches first
+                        this._clearAllCaches();
+                        // Reload both folders and passwords
+                        await Promise.all([this.loadFolders(), this.loadPasswords()]);
+                        this.renderPasswords();
+                        console.log('✅ Successfully reloaded data after folder deletion');
+                    } catch (error) {
+                        console.warn('Error reloading data after folder deletion:', error);
+                    }
                 } catch (error) {
                     // Network errors - log but don't revert UI
                     console.warn('Background folder deletion network error:', error);
@@ -2158,6 +2330,14 @@
                     }
                     
                     console.log('Background password move successful');
+                    
+                    // IMPORTANT: Reload passwords to ensure consistency with server
+                    try {
+                        await this.loadPasswords();
+                        console.log('✅ Passwords reloaded after move operation');
+                    } catch (reloadError) {
+                        console.warn('Error reloading passwords after move:', reloadError);
+                    }
                 } catch (error) {
                     // Network errors - log but don't revert UI
                     console.warn('Background password move network error:', error);
@@ -2194,6 +2374,14 @@
                     }
                     
                     console.log('Background folder creation successful');
+                    
+                    // IMPORTANT: Reload folders and passwords to ensure consistency
+                    try {
+                        await Promise.all([this.loadFolders(), this.loadPasswords()]);
+                        console.log('✅ Data reloaded after folder creation');
+                    } catch (reloadError) {
+                        console.warn('Error reloading data after folder creation:', reloadError);
+                    }
                 } catch (error) {
                     // Network errors - log but don't revert UI
                     console.warn('Background folder creation network error:', error);
@@ -2230,6 +2418,14 @@
                     }
                     
                     console.log('Background folder rename successful');
+                    
+                    // IMPORTANT: Reload data to ensure consistency
+                    try {
+                        await Promise.all([this.loadFolders(), this.loadPasswords()]);
+                        console.log('✅ Data reloaded after folder rename');
+                    } catch (reloadError) {
+                        console.warn('Error reloading data after folder rename:', reloadError);
+                    }
                 } catch (error) {
                     // Network errors - log but don't revert UI
                     console.warn('Background folder rename network error:', error);
@@ -2387,27 +2583,59 @@
                     return;
                 }
                 
-                // Optimistic update for smoother UX
+                // Check if change is needed
                 const currentPassword = this.passwords.find(p => p.id === id);
                 if (currentPassword && currentPassword.folderId === folderId) {
                     return; // No change needed
                 }
                 
-                // Update UI immediately for smooth experience
-                const index = this.passwords.findIndex(p => p.id === id);
-                if (index !== -1) {
-                    this.passwords[index] = { ...this.passwords[index], folderId: folderId || null };
+                try {
+                    // Make API call first to ensure server consistency
+                    const response = await fetch(`${this.apiBase}/passwords/${id}/move`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ folderId })
+                    });
                     
-                    // Clear caches and update UI smoothly
-                    this._clearCaches();
-                    requestAnimationFrame(() => this.renderPasswords());
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            this.showNotification('Warnung: Sitzung abgelaufen. Bitte melden Sie sich erneut an.', 'warning');
+                            return;
+                        }
+                        throw new Error(`Server error: ${response.status}`);
+                    }
                     
-                    // Show success message immediately
+                    // Server call successful, now reload passwords to ensure consistency
+                    console.log('✅ Password moved successfully to folder:', folderId);
+                    
+                    // Reload passwords from server to ensure consistency
+                    try {
+                        await this.loadPasswords();
+                        console.log('✅ Passwords reloaded after move operation');
+                    } catch (reloadError) {
+                        console.warn('Error reloading passwords after move:', reloadError);
+                        
+                        // Fallback: update UI optimistically
+                        const index = this.passwords.findIndex(p => p.id === id);
+                        if (index !== -1) {
+                            this.passwords[index] = { ...this.passwords[index], folderId: folderId || null };
+                            
+                            // Clear caches and update UI smoothly
+                            this._clearCaches();
+                            requestAnimationFrame(() => {
+                                this.renderPasswords();
+                                this.hydrateFolderSelects();
+                            });
+                        }
+                    }
+                    
+                    // Show success message
                     this.showNotification('Verschoben', 'success');
+                } catch (error) {
+                    console.error('Error moving password:', error);
+                    this.showNotification('Fehler beim Verschieben: ' + error.message, 'error');
                 }
-                
-                // Fire and forget API call in background
-                this._movePasswordInBackground(id, folderId, currentPassword);
             }
 
             async deletePassword(id) {
@@ -2477,12 +2705,24 @@
                     const container = document.getElementById('passwordsContainer');
                     if (!container) return;
                     
+                    // Debug logging for folder filtering
+                    console.log('renderPasswords called with:', {
+                        totalPasswords: this.passwords.length,
+                        selectedFolderId: this.selectedFolderId,
+                        passwordsToRender: passwordsToRender.length
+                    });
+                    
                     // Apply current folder filter if full list passed
                     if (passwordsToRender === this.passwords) {
                         passwordsToRender = this.passwords.filter(p => {
                             if (this.selectedFolderId === 'all') return true;
                             if (this.selectedFolderId === 'null') return p.folderId == null;
                             return p.folderId === this.selectedFolderId;
+                        });
+                        
+                        console.log('After folder filtering:', {
+                            filteredCount: passwordsToRender.length,
+                            selectedFolderId: this.selectedFolderId
                         });
                     }
 
@@ -2534,6 +2774,11 @@
                     // Add event listeners for expand/collapse
                     this.setupPasswordItemListeners();
                     this.makePasswordItemsDraggable();
+                    
+                    // Adjust textarea heights for notes
+                    this.adjustNotesTextareaHeights();
+                    
+                    console.log('✅ renderPasswords completed successfully');
                 } catch (error) {
                     console.error('Error in renderPasswords:', error);
                 }
@@ -2549,7 +2794,8 @@
                     const notes = password.notes ? this.escapeHtml(password.notes) : '';
                     
                     // Pre-build folder chips for better performance
-                    const folderChips = this._buildFolderChips(password.folderId);
+                    console.log(`Building folder chips for password ${password.id} (${password.title}) with folderId: ${password.folderId}`);
+                    const folderChips = this._buildFolderChips(password.id, password.folderId);
                     
                     return `
                         <div class="password-item" data-password-id="${password.id}">
@@ -2587,7 +2833,7 @@
                                         <div class="password-field full">
                                             <label>Notizen:</label>
                                             <div class="value">
-                                                <textarea readonly style="width: 100%; border: none; background: transparent; resize: none; font-family: inherit;">${notes}</textarea>
+                                                <textarea readonly data-notes-textarea>${notes}</textarea>
                                             </div>
                                         </div>
                                     ` : ''}
@@ -3004,6 +3250,94 @@
                 }
             }
 
+            async importUnencryptedData(data) {
+                // Neue Methode für unverschlüsselte Daten
+                await this.ensureMode();
+                if (this.localMode) {
+                    try {
+                        if (!data.passwords || !Array.isArray(data.passwords)) {
+                            throw new Error('Ungültiges Dateiformat: passwords-Array fehlt');
+                        }
+                        
+                        const vault = await LocalMode.loadVault(this.dataKeyHex);
+                        
+                        // Import folders if they exist in the export data
+                        if (data.folders && Array.isArray(data.folders)) {
+                            const existingFolderNames = new Set(vault.folders.map(f => f.name.toLowerCase().trim()));
+                            const newFolders = data.folders.filter(f => !existingFolderNames.has(f.name.toLowerCase().trim()));
+                            
+                            const importedFolders = newFolders.map((f, index) => ({
+                                ...f,
+                                id: f.id || crypto.randomUUID(),
+                                order: typeof f.order === 'number' ? f.order : (vault.folders.length + index),
+                                createdAt: f.createdAt || new Date().toISOString(),
+                                updatedAt: new Date().toISOString()
+                            }));
+                            
+                            vault.folders = [...vault.folders, ...importedFolders];
+                            vault.folders.sort((a, b) => {
+                                const orderA = typeof a.order === 'number' ? a.order : Number.MAX_SAFE_INTEGER;
+                                const orderB = typeof b.order === 'number' ? b.order : Number.MAX_SAFE_INTEGER;
+                                return orderA - orderB;
+                            });
+                        }
+                        
+                        // Import passwords
+                        const importedPasswords = data.passwords.map(p => ({
+                            ...p,
+                            id: p.id || crypto.randomUUID(),
+                            createdAt: p.createdAt || new Date().toISOString(),
+                            updatedAt: new Date().toISOString()
+                        }));
+                        
+                        vault.passwords = [...vault.passwords, ...importedPasswords];
+                        
+                        await LocalMode.saveVault(this.dataKeyHex, vault);
+                        await Promise.all([this.loadFolders(), this.loadPasswords()]);
+                        this.showNotification(`${importedPasswords.length} Passwörter erfolgreich importiert!`, 'success');
+                    } catch (error) {
+                        this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
+                    }
+                    return;
+                }
+                
+                // Für Server-Modus
+                try {
+                    const response = await fetch(`${this.apiBase}/import`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ 
+                            passwords: data.passwords,
+                            folders: data.folders || []
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error);
+                    }
+
+                    // Wait a moment for the server to process the import
+                    this.showNotification(`Import erfolgreich! Lade ${data.passwords.length} Passwörter...`, 'info');
+                    
+                    // Add delay before reloading to ensure server has processed the import
+                    setTimeout(async () => {
+                        try {
+                            await Promise.all([this.loadFolders(), this.loadPasswords()]);
+                            this.showNotification(`${data.passwords.length} Passwörter erfolgreich importiert und geladen!`, 'success');
+                        } catch (reloadError) {
+                            console.error('Error reloading after import:', reloadError);
+                            this.showNotification('Import erfolgreich, aber Fehler beim Laden der Passwörter. Bitte laden Sie die Seite neu.', 'warning');
+                        }
+                    }, 2000);
+                } catch (error) {
+                    this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
+                }
+            }
+
             async importData(file) {
                 await this.ensureMode();
                 if (this.localMode) {
@@ -3057,8 +3391,19 @@
                         }));
                         
                         await LocalMode.saveVault(this.dataKeyHex, vault);
-                        await Promise.all([this.loadFolders(), this.loadPasswords()]);
-                        this.showNotification('Daten erfolgreich importiert!', 'success');
+                        
+                        // Wait a moment before reloading
+                        this.showNotification('Import erfolgreich! Lade Daten...', 'info');
+                        
+                        setTimeout(async () => {
+                            try {
+                                await Promise.all([this.loadFolders(), this.loadPasswords()]);
+                                this.showNotification('Daten erfolgreich importiert und geladen!', 'success');
+                            } catch (reloadError) {
+                                console.error('Error reloading after local import:', reloadError);
+                                this.showNotification('Import erfolgreich, aber Fehler beim Laden der Daten. Bitte laden Sie die Seite neu.', 'warning');
+                            }
+                        }, 1000);
                     } catch (error) {
                         this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
                     }
@@ -3116,7 +3461,11 @@
                     vault.folders = Array.isArray(vault.folders) ? vault.folders : [];
                     const normalized = String(name).trim().toLowerCase();
                     const existing = vault.folders.find(f => String(f.name || '').trim().toLowerCase() === normalized);
-                    if (existing) { this.folders = vault.folders; return; }
+                    if (existing) { 
+                        this.folders = vault.folders; 
+                        this.hydrateFolderSelects();
+                        return; 
+                    }
                     const newFolder = { 
                         id: crypto.randomUUID(), 
                         name: String(name).trim(), 
@@ -3127,11 +3476,27 @@
                     vault.folders.push(newFolder);
                     await LocalMode.saveVault(this.dataKeyHex, vault);
                     this.folders = vault.folders;
+                    
+                    // Clear caches and update UI immediately
+                    this._clearCaches();
+                    requestAnimationFrame(() => {
+                        this.hydrateFolderSelects();
+                        this.renderFoldersList();
+                        this.renderPasswords();
+                    });
+                    
+                    this.showNotification('Ordner erstellt', 'success');
                     return;
                 }
                 
                 // Optimistic update for smoother UX
-                const newFolder = { id: crypto.randomUUID(), name: String(name).trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+                const newFolder = { 
+                    id: crypto.randomUUID(), 
+                    name: String(name).trim(), 
+                    order: this.folders.length, // Set order to end of list
+                    createdAt: new Date().toISOString(), 
+                    updatedAt: new Date().toISOString() 
+                };
                 this.folders.push(newFolder);
                 
                 // Clear caches and update UI smoothly
@@ -3202,14 +3567,36 @@
                 if (this.localMode) {
                     if (!confirm('Ordner wirklich löschen? Passwörter werden in "Ohne Ordner" verschoben.')) return;
                     const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    
+                    // Count passwords to be moved for notification
+                    const passwordsToMove = (vault.passwords || []).filter(p => p.folderId === id);
+                    
                     vault.folders = (vault.folders || []).filter(f => f.id !== id);
                     // Reassign passwords
                     vault.passwords = (vault.passwords || []).map(p => p.folderId === id ? { ...p, folderId: null, updatedAt: new Date().toISOString() } : p);
                     await LocalMode.saveVault(this.dataKeyHex, vault);
+                    
+                    // Update local state
                     this.folders = vault.folders;
-                    await this.loadPasswords();
-                    this.renderFoldersList();
-                    this.showNotification('Ordner gelöscht', 'success');
+                    this.passwords = vault.passwords;
+                    
+                    // Clear caches and reset folder selection
+                    this._clearCaches();
+                    this.selectedFolderId = 'all';
+                    
+                    // Update UI completely
+                    requestAnimationFrame(() => {
+                        this.renderFoldersList();
+                        this.renderPasswords();
+                        this.hydrateFolderSelects();
+                    });
+                    
+                    // Debug: Log password states
+                    console.log('After folder deletion:');
+                    console.log('Passwords with null folderId:', this.passwords.filter(p => p.folderId === null || p.folderId === undefined));
+                    console.log('All passwords:', this.passwords.map(p => ({id: p.id, title: p.title, folderId: p.folderId})));
+                    
+                    this.showNotification(`Ordner gelöscht (${passwordsToMove.length} Passwörter in "Ohne Ordner" verschoben)`, 'success');
                     return;
                 }
                 if (!confirm('Ordner wirklich löschen? Passwörter werden in "Ohne Ordner" verschoben.')) return;
@@ -3223,11 +3610,17 @@
                         p.folderId === id ? { ...p, folderId: null, updatedAt: new Date().toISOString() } : p
                     );
                     
+                    // Debug: Log password states
+                    console.log('Server mode - After folder deletion:');
+                    console.log('Passwords with null folderId:', this.passwords.filter(p => p.folderId === null || p.folderId === undefined));
+                    console.log('All passwords:', this.passwords.map(p => ({id: p.id, title: p.title, folderId: p.folderId})));
+                    
                     // Update UI IMMEDIATELY for instant feedback
                     this.updateUIAfterFolderDeletion();
                     
-                    // Show success message immediately
-                    this.showNotification(`Ordner gelöscht (${passwordsToUpdate.length} Passwörter in "Ohne Ordner" verschoben)`, 'success');
+                    // Show success message immediately with correct count
+                    const movedCount = passwordsToUpdate.length;
+                    this.showNotification(`Ordner gelöscht (${movedCount} Passwort${movedCount !== 1 ? 'er' : ''} in "Ohne Ordner" verschoben)`, 'success');
                     
                     // Fire and forget API call in background
                     this._deleteFolderInBackground(id);
@@ -3244,11 +3637,19 @@
                     // Clear caches for fresh data
                     this._clearCaches();
                     
+                    // Reset folder selection to "all" to ensure deleted folders don't cause issues
+                    this.selectedFolderId = 'all';
+                    
                     // Use requestAnimationFrame for smooth UI updates
                     requestAnimationFrame(() => {
                         this.renderFoldersList();
                         this.renderPasswords();
                         this.hydrateFolderSelects();
+                        
+                        // Force a re-render to ensure all changes are visible
+                        setTimeout(() => {
+                            this.renderPasswords();
+                        }, 100);
                     });
                 } catch (error) {
                     console.error('Error in updateUIAfterFolderDeletion:', error);
@@ -3256,33 +3657,55 @@
             }
 
             // Optimized folder chips builder for better performance
-            _buildFolderChips(passwordFolderId) {
+            _buildFolderChips(passwordId, passwordFolderId) {
                 try {
                     // Cache folder chips for better performance
                     if (!this._folderChipsCache) {
                         this._folderChipsCache = new Map();
                     }
                     
-                    const cacheKey = `${passwordFolderId}_${this.folders.length}`;
+                    const cacheKey = `${passwordId}_${passwordFolderId}_${this.folders.length}`;
                     if (this._folderChipsCache.has(cacheKey)) {
                         return this._folderChipsCache.get(cacheKey);
                     }
                     
+                    console.log(`_buildFolderChips: passwordId=${passwordId}, passwordFolderId=${passwordFolderId}, folders:`, this.folders);
+                    
                     const chips = [
-                        `<span class="folder-chip ${!passwordFolderId ? 'selected' : ''}" onclick="passwordManager.movePassword('${passwordFolderId}', null)">Ohne Ordner</span>`
+                        `<span class="folder-chip ${!passwordFolderId ? 'selected' : ''}" onclick="passwordManager.movePassword('${passwordId}', null)">Ohne Ordner</span>`
                     ];
                     
                     for (const folder of this.folders) {
                         const isSelected = passwordFolderId === folder.id;
-                        chips.push(`<span class="folder-chip ${isSelected ? 'selected' : ''}" onclick="passwordManager.movePassword('${passwordFolderId}', '${folder.id}')">${this.escapeHtml(folder.name)}</span>`);
+                        console.log(`Folder ${folder.id} (${folder.name}): isSelected=${isSelected} (${passwordFolderId} === ${folder.id})`);
+                        chips.push(`<span class="folder-chip ${isSelected ? 'selected' : ''}" onclick="passwordManager.movePassword('${passwordId}', '${folder.id}')">${this.escapeHtml(folder.name)}</span>`);
                     }
                     
                     const result = chips.join('');
                     this._folderChipsCache.set(cacheKey, result);
+                    
+                    // Debug: Log the result
+                    console.log(`Generated folder chips for password ${passwordId}:`, result);
+                    
                     return result;
                 } catch (error) {
                     console.error('Error in _buildFolderChips:', error);
                     return '<span class="folder-chip">Fehler</span>';
+                }
+            }
+
+            adjustNotesTextareaHeights() {
+                try {
+                    const textareas = document.querySelectorAll('[data-notes-textarea]');
+                    textareas.forEach(textarea => {
+                        // Reset height to auto to get the correct scrollHeight
+                        textarea.style.height = 'auto';
+                        // Set height to scrollHeight to fit content
+                        const scrollHeight = textarea.scrollHeight;
+                        textarea.style.height = Math.max(60, Math.min(scrollHeight, 200)) + 'px';
+                    });
+                } catch (error) {
+                    console.error('Error adjusting textarea heights:', error);
                 }
             }
 
@@ -3583,7 +4006,29 @@
         async function importData(event) {
             const file = event.target.files[0];
             if (file && passwordManager) {
-                await passwordManager.importData(file);
+                try {
+                    // Prüfe den Dateityp
+                    if (file.name.endsWith('.json')) {
+                        const text = await file.text();
+                        const data = JSON.parse(text);
+                        
+                        // Prüfe ob es verschlüsselte oder unverschlüsselte Daten sind
+                        if (data.encrypted && data.iv && data.salt) {
+                            // Verschlüsselte Daten - verwende normale Import-Methode
+                            await passwordManager.importData(file);
+                        } else if (data.passwords && Array.isArray(data.passwords)) {
+                            // Unverschlüsselte Daten - direkter Import
+                            await passwordManager.importUnencryptedData(data);
+                        } else {
+                            throw new Error('Ungültiges JSON-Format. Erwarte entweder verschlüsselte Daten oder ein passwords-Array.');
+                        }
+                    } else {
+                        // Andere Dateitypen (CSV, etc.)
+                        await passwordManager.importData(file);
+                    }
+                } catch (error) {
+                    passwordManager.showNotification('Import-Fehler: ' + error.message, 'error');
+                }
             }
             event.target.value = ''; // Reset file input
         }
