@@ -1599,10 +1599,10 @@ app.get('/api/all', requireMasterPassword, async (req, res) => {
     }
 });
 
-// Optimierte Suche nach Passwörtern
+// Optimierte Suche nach Passwörtern mit Entry-Type-Support
 app.get('/api/search', requireMasterPassword, async (req, res) => {
     try {
-        const { q: query, limit = 50 } = req.query;
+        const { q: query, limit = 50, type = 'all' } = req.query;
         const dataKey = getMasterPassword(req);
         
         if (!dataKey) {
@@ -1613,13 +1613,43 @@ app.get('/api/search', requireMasterPassword, async (req, res) => {
         
         const results = await FileManager.searchPasswords(query, dataKey, searchLimit);
         
+        // Filter by entry type if specified
+        const filteredResults = type !== 'all' 
+            ? results.filter(entry => (entry.type || 'password') === type)
+            : results;
+        
         res.json({
             query: query || '',
-            results: results,
-            count: results.length,
+            type: type,
+            results: filteredResults,
+            count: filteredResults.length,
             limit: searchLimit,
             timestamp: new Date().toISOString()
         });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get entries by type
+app.get('/api/entries/type/:type', requireMasterPassword, async (req, res) => {
+    try {
+        const { type } = req.params;
+        const validTypes = ['password', 'website', 'link', 'note'];
+        
+        if (!validTypes.includes(type)) {
+            return res.status(400).json({ 
+                error: `Invalid entry type. Valid types are: ${validTypes.join(', ')}` 
+            });
+        }
+        
+        const dataKey = getMasterPassword(req);
+        if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
+        
+        const entries = await FileManager.loadAndDecryptPasswordsCached(dataKey);
+        const filteredEntries = entries.filter(entry => (entry.type || 'password') === type);
+        
+        res.json(filteredEntries);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -1668,7 +1698,7 @@ const normalizeUrl = (raw) => {
     return input;
 };
 
-// Add new password
+// Add new password (legacy endpoint - backward compatibility)
 app.post('/api/add', requireMasterPassword, async (req, res) => {
     const startTime = Date.now();
     try {
@@ -1682,6 +1712,7 @@ app.post('/api/add', requireMasterPassword, async (req, res) => {
 
         const newPassword = {
             id: uuidv4(),
+            type: 'password', // Default type for backward compatibility
             title,
             username,
             password,
@@ -1706,6 +1737,61 @@ app.post('/api/add', requireMasterPassword, async (req, res) => {
         res.status(201).json(addedPassword);
     } catch (error) {
         trackOperation('addPassword_error', startTime);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add new entry (supports different entry types)
+app.post('/api/entries', requireMasterPassword, async (req, res) => {
+    const startTime = Date.now();
+    try {
+        const { type, title, content, url, notes, folderId, username, password } = req.body;
+        
+        if (!title || !type) {
+            return res.status(400).json({ 
+                error: 'Title and type are required' 
+            });
+        }
+
+        // Validate required fields based on entry type
+        if (type === 'password' && (!username || !password)) {
+            return res.status(400).json({ 
+                error: 'Username and password are required for password entries' 
+            });
+        }
+
+        const newEntry = {
+            id: uuidv4(),
+            type, // 'password', 'website', 'link', 'note'
+            title,
+            content: content || '', // For notes and generic content
+            url: normalizeUrl(url || ''),
+            notes: notes || '',
+            folderId: folderId || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        // Add password-specific fields if type is password
+        if (type === 'password') {
+            newEntry.username = username;
+            newEntry.password = password;
+        }
+
+        const dataKey = getMasterPassword(req);
+        if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
+        
+        // Verwende die optimierte Methode für einzelne Passwörter
+        const encryptedEntry = await FileManager.addSinglePassword(newEntry, dataKey);
+        
+        // Entschlüssele für die Antwort
+        const decryptedEntries = await FileManager.loadAndDecryptPasswordsCached(dataKey);
+        const addedEntry = decryptedEntries.find(p => p.id === encryptedEntry.id);
+
+        trackOperation('addEntry', startTime);
+        res.status(201).json(addedEntry);
+    } catch (error) {
+        trackOperation('addEntry_error', startTime);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1765,7 +1851,7 @@ app.post('/api/add-multiple', requireMasterPassword, async (req, res) => {
     }
 });
 
-// Update password
+// Update password (legacy endpoint - backward compatibility)
 app.put('/api/update/:id', requireMasterPassword, async (req, res) => {
     const startTime = Date.now();
     try {
@@ -1789,6 +1875,7 @@ app.put('/api/update/:id', requireMasterPassword, async (req, res) => {
             url: normalizeUrl(url || ''),
             notes: notes || '',
             folderId: folderId ?? null,
+            type: 'password', // Ensure backward compatibility
             updatedAt: new Date().toISOString()
         };
 
@@ -1802,6 +1889,63 @@ app.put('/api/update/:id', requireMasterPassword, async (req, res) => {
         res.json(updatedPassword);
     } catch (error) {
         trackOperation('updatePassword_error', startTime);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update entry (supports different entry types)
+app.put('/api/entries/:id', requireMasterPassword, async (req, res) => {
+    const startTime = Date.now();
+    try {
+        const { id } = req.params;
+        const { type, title, content, url, notes, folderId, username, password } = req.body;
+        
+        if (!title || !type) {
+            return res.status(400).json({ 
+                error: 'Title and type are required' 
+            });
+        }
+
+        // Validate required fields based on entry type
+        if (type === 'password' && (!username || !password)) {
+            return res.status(400).json({ 
+                error: 'Username and password are required for password entries' 
+            });
+        }
+
+        const dataKey = getMasterPassword(req);
+        if (!dataKey) return res.status(401).json({ error: 'Not authenticated' });
+        
+        const updatedEntryData = {
+            type,
+            title,
+            content: content || '',
+            url: normalizeUrl(url || ''),
+            notes: notes || '',
+            folderId: folderId ?? null,
+            updatedAt: new Date().toISOString()
+        };
+
+        // Add password-specific fields if type is password
+        if (type === 'password') {
+            updatedEntryData.username = username;
+            updatedEntryData.password = password;
+        }
+
+        const encryptedEntry = await FileManager.updateSinglePassword(id, updatedEntryData, dataKey);
+        
+        // Entschlüssele für die Antwort
+        const decryptedEntries = await FileManager.loadAndDecryptPasswordsCached(dataKey);
+        const updatedEntry = decryptedEntries.find(p => p.id === id);
+
+        if (!updatedEntry) {
+            return res.status(404).json({ error: 'Entry not found' });
+        }
+
+        trackOperation('updateEntry', startTime);
+        res.json(updatedEntry);
+    } catch (error) {
+        trackOperation('updateEntry_error', startTime);
         res.status(500).json({ error: error.message });
     }
 });

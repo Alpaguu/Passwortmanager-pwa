@@ -194,13 +194,26 @@
 
         .toolbar {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 32px;
-            flex-wrap: wrap;
+            flex-direction: column;
             gap: 16px;
+            margin-bottom: 32px;
             padding: 24px 0;
             border-bottom: 1px solid #f3f4f6;
+        }
+
+        .toolbar-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .toolbar-row-1 {
+            align-items: center;
+        }
+
+        .toolbar-row-2 {
+            align-items: flex-start;
         }
 
         .search-box {
@@ -338,6 +351,96 @@
 
         .password-item.dragging {
             opacity: 0.6;
+        }
+
+        /* Entry type styling */
+        .password-item.entry-website {
+            border-left: 4px solid #007bff;
+        }
+        
+        .password-item.entry-link {
+            border-left: 4px solid #17a2b8;
+        }
+        
+        .password-item.entry-note {
+            border-left: 4px solid #28a745;
+        }
+        
+        .password-item.entry-password {
+            border-left: 4px solid #dc3545;
+        }
+
+        /* Type filter container styling - Desktop */
+        .type-filter-container {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .type-filter-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .type-filter-btn {
+            padding: 8px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            background: #ffffff;
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .type-filter-btn:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+            color: #374151;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .type-filter-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+            color: #ffffff;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+        }
+        
+        .type-filter-btn.active:hover {
+            background: #2563eb;
+            border-color: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        /* Type filter box styling - Mobile fallback */
+        .type-filter-box {
+            margin-right: 8px;
+        }
+        
+        .type-filter-box select {
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background: #ffffff;
+            font-size: 14px;
+        }
+
+        /* Responsive visibility controls */
+        .desktop-only {
+            display: block;
+        }
+        
+        .mobile-only {
+            display: none;
         }
 
         .folder-box {
@@ -894,9 +997,23 @@
                 font-size: 2rem;
             }
 
-            .toolbar {
+            .toolbar-row {
                 flex-direction: column;
                 align-items: stretch;
+            }
+
+            .toolbar-row-2 .btn-group {
+                margin-top: 16px;
+                width: 100%;
+            }
+
+            /* Mobile: Hide desktop type filter and show dropdown */
+            .desktop-only {
+                display: none !important;
+            }
+            
+            .mobile-only {
+                display: block !important;
             }
 
             .btn-group {
@@ -1135,26 +1252,67 @@
 
         <!-- Main Content -->
         <div class="main-content" id="mainContent" style="display: none;">
-            <div class="toolbar">
-                <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="Passwörter durchsuchen...">
-                    <span class="search-icon">⌕</span>
+                        <div class="toolbar">
+                <!-- Zeile 1: Suchfeld + Type-Filter -->
+                <div class="toolbar-row toolbar-row-1">
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="Einträge durchsuchen...">
+                        <span class="search-icon">⌕</span>
+                    </div>
+                    
+                    <!-- Type Filter - Desktop Version -->
+                    <div class="type-filter-container desktop-only">
+                        <div class="type-filter-buttons">
+                            <button class="type-filter-btn active" data-type="all" onclick="passwordManager.filterByType('all')">
+                                🗂️ Alle Typen
+                            </button>
+                            <button class="type-filter-btn" data-type="password" onclick="passwordManager.filterByType('password')">
+                                🔐 Passwörter
+                            </button>
+                            <button class="type-filter-btn" data-type="website" onclick="passwordManager.filterByType('website')">
+                                🌐 Webseiten
+                            </button>
+                            <button class="type-filter-btn" data-type="link" onclick="passwordManager.filterByType('link')">
+                                🔗 Links
+                            </button>
+                            <button class="type-filter-btn" data-type="note" onclick="passwordManager.filterByType('note')">
+                                📝 Notizen
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="folder-box">
-                    <select id="folderSelect" aria-label="Ordnerfilter">
-                        <option value="all">Alle Ordner</option>
-                        <option value="null">Ohne Ordner</option>
-                    </select>
-                </div>
-                <div class="sort-box">
-                    <select id="sortSelect" aria-label="Sortierung">
-                        <option value="az">Titel A–Z</option>
-                        <option value="za">Titel Z–A</option>
-                    </select>
-                </div>
-                <div class="btn-group">
-                    <button class="btn" onclick="showAddPasswordModal()">+ Neues Passwort</button>
-                    <button class="btn btn-secondary" id="manageFoldersBtn">Ordner verwalten</button>
+
+                <!-- Zeile 2: Dropdowns + Buttons (linksbündig) -->
+                <div class="toolbar-row toolbar-row-2">
+                    <!-- Type Filter - Mobile Version -->
+                    <div class="type-filter-box mobile-only">
+                        <select id="typeFilter" onchange="passwordManager.filterByType(this.value)" aria-label="Eintrag-Typ filtern">
+                            <option value="all">🗂️ Alle Typen</option>
+                            <option value="password">🔐 Passwörter</option>
+                            <option value="website">🌐 Webseiten</option>
+                            <option value="link">🔗 Links</option>
+                            <option value="note">📝 Notizen</option>
+                        </select>
+                    </div>
+                    
+                    <div class="folder-box">
+                        <select id="folderSelect" aria-label="Ordnerfilter">
+                            <option value="all">Alle Ordner</option>
+                            <option value="null">Ohne Ordner</option>
+                        </select>
+                    </div>
+                    
+                    <div class="sort-box">
+                        <select id="sortSelect" aria-label="Sortierung">
+                            <option value="az">Titel A–Z</option>
+                            <option value="za">Titel Z–A</option>
+                        </select>
+                    </div>
+                    
+                    <div class="btn-group">
+                        <button class="btn" onclick="showAddPasswordModal()">+ Neuer Eintrag</button>
+                        <button class="btn btn-secondary" id="manageFoldersBtn">Ordner verwalten</button>
+                    </div>
                 </div>
             </div>
 
@@ -1180,46 +1338,82 @@
         </div>
     </div>
 
-    <!-- Add/Edit Password Modal -->
+    <!-- Add/Edit Entry Modal -->
     <div id="passwordModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeModal('passwordModal')">&times;</span>
             <h2 id="modalTitle">Neues Passwort hinzufügen</h2>
             <form id="passwordForm">
+                <!-- Entry Type Selection -->
+                <div class="form-group">
+                    <label for="entryType">Eintrag-Typ:</label>
+                    <select id="entryType" onchange="toggleEntryTypeFields()">
+                        <option value="password">🔐 Passwort</option>
+                        <option value="website">🌐 Webseite</option>
+                        <option value="link">🔗 Link/Bookmark</option>
+                        <option value="note">📝 Notiz</option>
+                    </select>
+                </div>
+                
                 <div class="form-group">
                     <label for="title">Titel:</label>
                     <input type="text" id="title" required>
                 </div>
+                
                 <div class="form-group">
                     <label for="passwordFolder">Ordner (optional):</label>
                     <select id="passwordFolder">
                         <option value="">Ohne Ordner</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="username">Benutzername/E-Mail:</label>
-                    <input type="text" id="username" required>
-                </div>
-                <div class="form-group">
-                    <label for="password">Passwort:</label>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <input type="password" id="password" required style="flex:1;">
-                        <button type="button" class="icon-btn" id="togglePasswordBtn" title="Sichtbarkeit umschalten" onclick="toggleModalPasswordVisibility()">👁️</button>
+                
+                <!-- Password-specific fields -->
+                <div id="passwordFields" class="entry-type-fields">
+                    <div class="form-group">
+                        <label for="username">Benutzername/E-Mail:</label>
+                        <input type="text" id="username">
                     </div>
-                    <div class="strength-meter">
-                        <div class="strength-bar" id="strengthBar"></div>
+                    <div class="form-group">
+                        <label for="password">Passwort:</label>
+                        <div style="display:flex; gap:8px; align-items:center;">
+                            <input type="password" id="password" style="flex:1;">
+                            <button type="button" class="icon-btn" id="togglePasswordBtn" title="Sichtbarkeit umschalten" onclick="toggleModalPasswordVisibility()">👁️</button>
+                        </div>
+                        <div class="strength-meter">
+                            <div class="strength-bar" id="strengthBar"></div>
+                        </div>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label for="url">URL (optional):</label>
-                    <input type="text" id="url" placeholder="example.com">
+                
+                <!-- Website/Link-specific fields -->
+                <div id="linkFields" class="entry-type-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="url">URL:</label>
+                        <input type="text" id="url" placeholder="https://example.com">
+                    </div>
                 </div>
+                
+                <!-- Note-specific fields -->
+                <div id="noteFields" class="entry-type-fields" style="display: none;">
+                    <div class="form-group">
+                        <label for="content">Inhalt:</label>
+                        <textarea id="content" rows="4" style="width: 100%; padding: 15px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; resize: vertical;" placeholder="Ihr Notizinhalt..."></textarea>
+                    </div>
+                </div>
+                
+                <!-- Common fields -->
+                <div class="form-group" id="urlFieldCommon" style="display: block;">
+                    <label for="urlCommon">URL (optional):</label>
+                    <input type="text" id="urlCommon" placeholder="example.com">
+                </div>
+                
                 <div class="form-group">
                     <label for="notes">Notizen (optional):</label>
                     <textarea id="notes" rows="3" style="width: 100%; padding: 15px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; resize: vertical;"></textarea>
                 </div>
+                
                 <div class="btn-group">
-                    <button type="button" class="btn btn-secondary" onclick="generatePassword()">🔧 Passwort generieren</button>
+                    <button type="button" class="btn btn-secondary" id="generatePasswordBtn" onclick="generatePassword()" style="display: block;">🔧 Passwort generieren</button>
                     <button type="submit" class="btn">Speichern</button>
                 </div>
             </form>
@@ -1491,6 +1685,7 @@
                 this.sortOrder = 'az';
                 this.folders = [];
                 this.selectedFolderId = 'all';
+                this.selectedEntryType = 'all'; // Default to show all entry types
                 this.cachedMasterPassword = null; // in-memory only, to transparently re-login on 401
                 this.init();
             }
@@ -1613,24 +1808,59 @@
             }
 
             async savePassword() {
+                const entryType = document.getElementById('entryType').value;
+                
                 const formData = {
+                    type: entryType,
                     title: document.getElementById('title').value.trim(),
-                    username: document.getElementById('username').value.trim(),
-                    password: document.getElementById('password').value,
-                    url: this.normalizeUrl(document.getElementById('url').value),
                     notes: document.getElementById('notes').value.trim(),
                     folderId: document.getElementById('passwordFolder') ? (document.getElementById('passwordFolder').value || null) : null
                 };
 
-                if (!formData.title || !formData.username || !formData.password) {
-                    alert('Bitte füllen Sie alle Pflichtfelder aus.');
+                // Validate basic fields
+                if (!formData.title) {
+                    alert('Bitte geben Sie einen Titel ein.');
                     return;
                 }
 
+                // Add type-specific fields and validation
+                switch(entryType) {
+                    case 'password':
+                        formData.username = document.getElementById('username').value.trim();
+                        formData.password = document.getElementById('password').value;
+                        formData.url = this.normalizeUrl(document.getElementById('urlCommon').value);
+                        
+                        if (!formData.username || !formData.password) {
+                            alert('Bitte füllen Sie Benutzername und Passwort aus.');
+                            return;
+                        }
+                        break;
+                        
+                    case 'website':
+                    case 'link':
+                        formData.url = this.normalizeUrl(document.getElementById('url').value);
+                        
+                        if (!formData.url) {
+                            alert('Bitte geben Sie eine URL ein.');
+                            return;
+                        }
+                        break;
+                        
+                    case 'note':
+                        formData.content = document.getElementById('content').value.trim();
+                        formData.url = this.normalizeUrl(document.getElementById('urlCommon').value);
+                        
+                        if (!formData.content) {
+                            alert('Bitte geben Sie einen Inhalt für die Notiz ein.');
+                            return;
+                        }
+                        break;
+                }
+
                 if (currentEditingId) {
-                    await this.updatePassword(currentEditingId, formData);
+                    await this.updateEntry(currentEditingId, formData);
                 } else {
-                    await this.addPassword(formData);
+                    await this.addEntry(formData);
                 }
 
                 closeModal('passwordModal');
@@ -2568,6 +2798,116 @@
                 }
             }
 
+            // New unified entry methods
+            async addEntry(entryData) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    const newEntry = { 
+                        id: crypto.randomUUID(), 
+                        ...entryData, 
+                        type: entryData.type || 'password', // Default to password for backward compatibility
+                        createdAt: new Date().toISOString(), 
+                        updatedAt: new Date().toISOString() 
+                    };
+                    vault.passwords = Array.isArray(vault.passwords) ? vault.passwords : [];
+                    vault.passwords.push(newEntry);
+                    vault.encryptionScheme = ENCRYPTION_SCHEME;
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    this.passwords.push(newEntry);
+                    
+                    const entryTypeName = this.getEntryTypeName(entryData.type);
+                    this.renderPasswords();
+                    this.showNotification(`${entryTypeName} erfolgreich hinzugefügt!`, 'success');
+                } else {
+                    try {
+                        if (!this.isAuthenticated) {
+                            throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                        }
+
+                        const response = await fetch(`${this.apiBase}/entries`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify(entryData)
+                        });
+                        
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.error || 'Entry creation failed');
+                        }
+                        
+                        const newEntry = await response.json();
+                        this.passwords.push(newEntry);
+                        this.renderPasswords();
+                        
+                        const entryTypeName = this.getEntryTypeName(entryData.type);
+                        this.showNotification(`${entryTypeName} erfolgreich hinzugefügt!`, 'success');
+                    } catch (error) {
+                        this.showNotification('Fehler beim Hinzufügen: ' + error.message, 'error');
+                    }
+                }
+            }
+
+            async updateEntry(id, entryData) {
+                await this.ensureMode();
+                if (this.localMode) {
+                    if (!this.isAuthenticated || !this.dataKeyHex) throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                    const vault = await LocalMode.loadVault(this.dataKeyHex);
+                    const idx = (vault.passwords || []).findIndex(p => p.id === id);
+                    if (idx === -1) throw new Error('Entry not found');
+                    vault.passwords[idx] = { ...vault.passwords[idx], ...entryData, updatedAt: new Date().toISOString() };
+                    await LocalMode.saveVault(this.dataKeyHex, vault);
+                    const localIdx = this.passwords.findIndex(p => p.id === id);
+                    if (localIdx !== -1) this.passwords[localIdx] = vault.passwords[idx];
+                    
+                    const entryTypeName = this.getEntryTypeName(entryData.type);
+                    this.renderPasswords();
+                    this.showNotification(`${entryTypeName} erfolgreich aktualisiert!`, 'success');
+                } else {
+                    try {
+                        if (!this.isAuthenticated) {
+                            throw new Error('Nicht angemeldet. Bitte melden Sie sich zuerst an.');
+                        }
+
+                        const response = await fetch(`${this.apiBase}/entries/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify(entryData)
+                        });
+                        
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.error || 'Update failed');
+                        }
+                        
+                        const updatedEntry = await response.json();
+                        const index = this.passwords.findIndex(p => p.id === id);
+                        if (index !== -1) {
+                            this.passwords[index] = updatedEntry;
+                        }
+                        this.renderPasswords();
+                        
+                        const entryTypeName = this.getEntryTypeName(entryData.type);
+                        this.showNotification(`${entryTypeName} erfolgreich aktualisiert!`, 'success');
+                    } catch (error) {
+                        this.showNotification('Fehler beim Aktualisieren: ' + error.message, 'error');
+                    }
+                }
+            }
+
+            getEntryTypeName(type) {
+                switch(type) {
+                    case 'password': return 'Passwort';
+                    case 'website': return 'Webseite';
+                    case 'link': return 'Link';
+                    case 'note': return 'Notiz';
+                    default: return 'Eintrag';
+                }
+            }
+
             async movePassword(id, folderId) {
                 await this.ensureMode();
                 if (this.localMode) {
@@ -2674,6 +3014,28 @@
                 }
             }
 
+            filterByType(selectedType) {
+                this.selectedEntryType = selectedType;
+                this.currentPage = 1; // Reset to first page when filtering
+                
+                // Update active state for desktop buttons
+                const typeFilterButtons = document.querySelectorAll('.type-filter-btn');
+                typeFilterButtons.forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.type === selectedType) {
+                        btn.classList.add('active');
+                    }
+                });
+                
+                // Update mobile dropdown
+                const mobileSelect = document.getElementById('typeFilter');
+                if (mobileSelect) {
+                    mobileSelect.value = selectedType;
+                }
+                
+                this.renderPasswords();
+            }
+
             filterPasswords(searchTerm) {
                 // Reset to first page when filtering
                 this.currentPage = 1;
@@ -2712,25 +3074,41 @@
                         passwordsToRender: passwordsToRender.length
                     });
                     
-                    // Apply current folder filter if full list passed
+                    // Apply current folder and type filters if full list passed
                     if (passwordsToRender === this.passwords) {
                         passwordsToRender = this.passwords.filter(p => {
-                            if (this.selectedFolderId === 'all') return true;
-                            if (this.selectedFolderId === 'null') return p.folderId == null;
-                            return p.folderId === this.selectedFolderId;
+                            // Folder filter
+                            let folderMatch = true;
+                            if (this.selectedFolderId !== 'all') {
+                                if (this.selectedFolderId === 'null') {
+                                    folderMatch = p.folderId == null;
+                                } else {
+                                    folderMatch = p.folderId === this.selectedFolderId;
+                                }
+                            }
+                            
+                            // Type filter
+                            let typeMatch = true;
+                            if (this.selectedEntryType && this.selectedEntryType !== 'all') {
+                                const entryType = p.type || 'password';
+                                typeMatch = entryType === this.selectedEntryType;
+                            }
+                            
+                            return folderMatch && typeMatch;
                         });
                         
-                        console.log('After folder filtering:', {
+                        console.log('After filtering:', {
                             filteredCount: passwordsToRender.length,
-                            selectedFolderId: this.selectedFolderId
+                            selectedFolderId: this.selectedFolderId,
+                            selectedEntryType: this.selectedEntryType
                         });
                     }
 
                     if (passwordsToRender.length === 0) {
                         container.innerHTML = `
                             <div class="empty-state">
-                                <h3>${this.passwords.length === 0 ? 'Keine Passwörter vorhanden' : 'Keine Passwörter gefunden'}</h3>
-                                <p>${this.passwords.length === 0 ? 'Fügen Sie Ihr erstes Passwort hinzu, um zu beginnen.' : 'Versuchen Sie einen anderen Suchbegriff.'}</p>
+                                <h3>${this.passwords.length === 0 ? 'Keine Einträge vorhanden' : 'Keine Einträge gefunden'}</h3>
+                                <p>${this.passwords.length === 0 ? 'Fügen Sie Ihren ersten Eintrag hinzu, um zu beginnen.' : 'Versuchen Sie einen anderen Suchbegriff oder Filter.'}</p>
                             </div>
                         `;
                         return;
@@ -2785,47 +3163,42 @@
             }
 
             renderPasswordRow(password) {
+                return this.renderEntryRow(password);
+            }
+
+            renderEntryRow(entry) {
                 try {
-                    // Cache escapeHtml calls for better performance
-                    const title = this.escapeHtml(password.title);
-                    const username = this.escapeHtml(password.username);
-                    const url = this.escapeHtml(password.url || '');
-                    const passwordValue = this.escapeHtml(password.password);
-                    const notes = password.notes ? this.escapeHtml(password.notes) : '';
+                    const title = this.escapeHtml(entry.title);
+                    const type = entry.type || 'password'; // Default to password for backward compatibility
+                    const url = entry.url ? this.escapeHtml(entry.url) : '';
+                    const notes = entry.notes ? this.escapeHtml(entry.notes) : '';
                     
                     // Pre-build folder chips for better performance
-                    console.log(`Building folder chips for password ${password.id} (${password.title}) with folderId: ${password.folderId}`);
-                    const folderChips = this._buildFolderChips(password.id, password.folderId);
+                    console.log(`Building folder chips for entry ${entry.id} (${entry.title}) with folderId: ${entry.folderId}`);
+                    const folderChips = this._buildFolderChips(entry.id, entry.folderId);
+                    
+                    // Get type-specific icon and fields
+                    const typeIcon = this.getEntryTypeIcon(type);
+                    const typeFields = this.renderEntryTypeFields(entry, type);
                     
                     return `
-                        <div class="password-item" data-password-id="${password.id}">
+                        <div class="password-item entry-${type}" data-password-id="${entry.id}">
                             <div class="password-header" role="button" tabindex="0" title="Details anzeigen">
-                                <h3>${title}</h3>
+                                <h3>${typeIcon} ${title}</h3>
                                 <span class="chevron" aria-hidden="true"></span>
                             </div>
                             <div class="password-content">
                                 <div class="password-details">
-                                    <div class="password-field">
-                                        <label>Benutzername:</label>
-                                        <div class="value">
-                                            <input type="text" value="${username}" readonly>
-                                            <button class="copy-btn" onclick="copyToClipboard('${username}')">Kopieren</button>
-                                        </div>
-                                    </div>
-                                    <div class="password-field">
-                                        <label>Passwort:</label>
-                                        <div class="value">
-                                            <input type="password" value="${passwordValue}" readonly id="pwd-${password.id}">
-                                            <button class="copy-btn" onclick="copyToClipboard('${passwordValue}')">Kopieren</button>
-                                            <button class="copy-btn" onclick="togglePasswordVisibility('${password.id}')">👁️</button>
-                                        </div>
-                                    </div>
-                                    ${password.url ? `
+                                    ${typeFields}
+                                    ${url ? `
                                         <div class="password-field">
                                             <label>URL:</label>
                                             <div class="value">
                                                 <input type="text" value="${url}" readonly>
                                                 <button class="copy-btn" onclick="copyToClipboard('${url}')">Kopieren</button>
+                                                ${type === 'website' || type === 'link' ? `
+                                                    <button class="copy-btn" onclick="openEntryUrl('${url}')">🔗 Öffnen</button>
+                                                ` : ''}
                                             </div>
                                         </div>
                                     ` : ''}
@@ -2845,19 +3218,68 @@
                                     </div>
                                 </div>
                                 <div class="row-footer">
-                                    <button class="btn" onclick="editPassword('${password.id}')">Bearbeiten</button>
-                                    <button class="btn btn-danger" onclick="deletePassword('${password.id}')">Löschen</button>
+                                    <button class="btn" onclick="editPassword('${entry.id}')">Bearbeiten</button>
+                                    <button class="btn btn-danger" onclick="deletePassword('${entry.id}')">Löschen</button>
                                 </div>
                             </div>
                         </div>
                     `;
                 } catch (error) {
-                    console.error('Error in renderPasswordRow:', error);
-                    return `<div class="password-item" data-password-id="${password.id}">
+                    console.error('Error in renderEntryRow:', error);
+                    return `<div class="password-item" data-password-id="${entry.id}">
                         <div class="password-header">
                             <h3>Fehler beim Rendern</h3>
                         </div>
                     </div>`;
+                }
+            }
+
+            getEntryTypeIcon(type) {
+                switch(type) {
+                    case 'password': return '🔐';
+                    case 'website': return '🌐';
+                    case 'link': return '🔗';
+                    case 'note': return '📝';
+                    default: return '📄';
+                }
+            }
+
+            renderEntryTypeFields(entry, type) {
+                switch(type) {
+                    case 'password':
+                        const username = this.escapeHtml(entry.username || '');
+                        const passwordValue = this.escapeHtml(entry.password || '');
+                        return `
+                            <div class="password-field">
+                                <label>Benutzername:</label>
+                                <div class="value">
+                                    <input type="text" value="${username}" readonly>
+                                    <button class="copy-btn" onclick="copyToClipboard('${username}')">Kopieren</button>
+                                </div>
+                            </div>
+                            <div class="password-field">
+                                <label>Passwort:</label>
+                                <div class="value">
+                                    <input type="password" value="${passwordValue}" readonly id="pwd-${entry.id}">
+                                    <button class="copy-btn" onclick="copyToClipboard('${passwordValue}')">Kopieren</button>
+                                    <button class="copy-btn" onclick="togglePasswordVisibility('${entry.id}')">👁️</button>
+                                </div>
+                            </div>
+                        `;
+                    case 'note':
+                        const content = this.escapeHtml(entry.content || '');
+                        return content ? `
+                            <div class="password-field full">
+                                <label>Inhalt:</label>
+                                <div class="value">
+                                    <textarea readonly data-notes-textarea>${content}</textarea>
+                                </div>
+                            </div>
+                        ` : '';
+                    case 'website':
+                    case 'link':
+                    default:
+                        return ''; // URL field is handled in the main function
                 }
             }
 
@@ -3915,26 +4337,53 @@
 
         function showAddPasswordModal() {
             currentEditingId = null;
-            document.getElementById('modalTitle').textContent = 'Neues Passwort hinzufügen';
             document.getElementById('passwordForm').reset();
+            
+            // Reset to password type by default
+            document.getElementById('entryType').value = 'password';
+            toggleEntryTypeFields(); // This will set the correct modal title and show/hide fields
+            
             document.getElementById('passwordModal').style.display = 'block';
             if (passwordManager) passwordManager.hydrateFolderSelects();
         }
 
         function editPassword(id) {
-            const password = passwordManager.passwords.find(p => p.id === id);
-            if (password) {
+            const entry = passwordManager.passwords.find(p => p.id === id);
+            if (entry) {
                 currentEditingId = id;
-                document.getElementById('modalTitle').textContent = 'Passwort bearbeiten';
-                document.getElementById('title').value = password.title;
+                const entryType = entry.type || 'password';
+                
+                // Set entry type
+                document.getElementById('entryType').value = entryType;
+                toggleEntryTypeFields(); // This will set the correct modal title and show/hide fields
+                
+                // Set common fields
+                document.getElementById('title').value = entry.title;
                 if (passwordManager) passwordManager.hydrateFolderSelects();
                 const folderSelect = document.getElementById('passwordFolder');
-                if (folderSelect) folderSelect.value = password.folderId || '';
-                document.getElementById('username').value = password.username;
-                document.getElementById('password').value = password.password;
-                document.getElementById('url').value = password.url || '';
-                document.getElementById('notes').value = password.notes || '';
-                passwordManager.updatePasswordStrength(password.password);
+                if (folderSelect) folderSelect.value = entry.folderId || '';
+                document.getElementById('notes').value = entry.notes || '';
+                
+                // Set type-specific fields
+                switch(entryType) {
+                    case 'password':
+                        document.getElementById('username').value = entry.username || '';
+                        document.getElementById('password').value = entry.password || '';
+                        document.getElementById('urlCommon').value = entry.url || '';
+                        if (entry.password) {
+                            passwordManager.updatePasswordStrength(entry.password);
+                        }
+                        break;
+                    case 'website':
+                    case 'link':
+                        document.getElementById('url').value = entry.url || '';
+                        break;
+                    case 'note':
+                        document.getElementById('content').value = entry.content || '';
+                        document.getElementById('urlCommon').value = entry.url || '';
+                        break;
+                }
+                
                 document.getElementById('passwordModal').style.display = 'block';
             }
         }
@@ -3985,6 +4434,70 @@
             const input = document.getElementById('password');
             if (!input) return;
             input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        // Toggle fields based on entry type
+        function toggleEntryTypeFields() {
+            const entryType = document.getElementById('entryType').value;
+            const passwordFields = document.getElementById('passwordFields');
+            const linkFields = document.getElementById('linkFields');
+            const noteFields = document.getElementById('noteFields');
+            const urlFieldCommon = document.getElementById('urlFieldCommon');
+            const generatePasswordBtn = document.getElementById('generatePasswordBtn');
+            const modalTitle = document.getElementById('modalTitle');
+            
+            // Hide all specific fields first
+            passwordFields.style.display = 'none';
+            linkFields.style.display = 'none';
+            noteFields.style.display = 'none';
+            
+            // Update modal title and show relevant fields
+            switch(entryType) {
+                case 'password':
+                    modalTitle.textContent = 'Passwort hinzufügen';
+                    passwordFields.style.display = 'block';
+                    urlFieldCommon.style.display = 'block';
+                    generatePasswordBtn.style.display = 'block';
+                    // Make password fields required
+                    document.getElementById('username').required = true;
+                    document.getElementById('password').required = true;
+                    break;
+                case 'website':
+                    modalTitle.textContent = 'Webseite hinzufügen';
+                    linkFields.style.display = 'block';
+                    urlFieldCommon.style.display = 'none';
+                    generatePasswordBtn.style.display = 'none';
+                    // Make URL required for websites
+                    document.getElementById('url').required = true;
+                    break;
+                case 'link':
+                    modalTitle.textContent = 'Link/Bookmark hinzufügen';
+                    linkFields.style.display = 'block';
+                    urlFieldCommon.style.display = 'none';
+                    generatePasswordBtn.style.display = 'none';
+                    document.getElementById('url').required = true;
+                    break;
+                case 'note':
+                    modalTitle.textContent = 'Notiz hinzufügen';
+                    noteFields.style.display = 'block';
+                    urlFieldCommon.style.display = 'block';
+                    generatePasswordBtn.style.display = 'none';
+                    // Make content required for notes
+                    document.getElementById('content').required = true;
+                    break;
+            }
+            
+            // Reset requirements for fields that are hidden
+            if (entryType !== 'password') {
+                document.getElementById('username').required = false;
+                document.getElementById('password').required = false;
+            }
+            if (entryType !== 'website' && entryType !== 'link') {
+                document.getElementById('url').required = false;
+            }
+            if (entryType !== 'note') {
+                document.getElementById('content').required = false;
+            }
         }
 
         // Open URL helper for compact rows
