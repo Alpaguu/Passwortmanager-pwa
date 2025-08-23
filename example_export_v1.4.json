@@ -1,0 +1,110 @@
+{
+  "version": "1.4",
+  "exportDate": "2024-01-15T10:30:00.000Z",
+  "entries": [
+    {
+      "id": "pwd-001",
+      "type": "password",
+      "title": "Gmail Account",
+      "username": "user@example.com",
+      "password": "mySecretPassword123!",
+      "url": "https://gmail.com",
+      "notes": "Mein Haupt-Email Account",
+      "folderId": "folder-001",
+      "createdAt": "2024-01-01T10:00:00.000Z",
+      "updatedAt": "2024-01-01T10:00:00.000Z"
+    },
+    {
+      "id": "web-001",
+      "type": "website",
+      "title": "GitHub Repository",
+      "url": "https://github.com/myusername/myproject",
+      "notes": "Mein wichtigstes Projekt auf GitHub",
+      "folderId": "folder-002",
+      "createdAt": "2024-01-02T11:00:00.000Z",
+      "updatedAt": "2024-01-02T11:00:00.000Z"
+    },
+    {
+      "id": "link-001",
+      "type": "link",
+      "title": "Nützliche Dokumentation",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+      "notes": "JavaScript Referenz-Dokumentation",
+      "folderId": null,
+      "createdAt": "2024-01-03T12:00:00.000Z",
+      "updatedAt": "2024-01-03T12:00:00.000Z"
+    },
+    {
+      "id": "note-001",
+      "type": "note",
+      "title": "Meeting Notizen",
+      "content": "Wichtige Punkte aus dem Team-Meeting:\n- Neues Feature implementieren\n- Code Review bis Freitag\n- Tests schreiben",
+      "url": "",
+      "notes": "Wöchentliches Team-Meeting vom 15.01.2024",
+      "folderId": "folder-001",
+      "createdAt": "2024-01-15T14:00:00.000Z",
+      "updatedAt": "2024-01-15T14:00:00.000Z"
+    }
+  ],
+  "passwords": [
+    {
+      "id": "pwd-001",
+      "type": "password",
+      "title": "Gmail Account",
+      "username": "user@example.com",
+      "password": "mySecretPassword123!",
+      "url": "https://gmail.com",
+      "notes": "Mein Haupt-Email Account",
+      "folderId": "folder-001",
+      "createdAt": "2024-01-01T10:00:00.000Z",
+      "updatedAt": "2024-01-01T10:00:00.000Z"
+    },
+    {
+      "id": "web-001",
+      "type": "website",
+      "title": "GitHub Repository",
+      "url": "https://github.com/myusername/myproject",
+      "notes": "Mein wichtigstes Projekt auf GitHub",
+      "folderId": "folder-002",
+      "createdAt": "2024-01-02T11:00:00.000Z",
+      "updatedAt": "2024-01-02T11:00:00.000Z"
+    },
+    {
+      "id": "link-001",
+      "type": "link",
+      "title": "Nützliche Dokumentation",
+      "url": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+      "notes": "JavaScript Referenz-Dokumentation",
+      "folderId": null,
+      "createdAt": "2024-01-03T12:00:00.000Z",
+      "updatedAt": "2024-01-03T12:00:00.000Z"
+    },
+    {
+      "id": "note-001",
+      "type": "note",
+      "title": "Meeting Notizen",
+      "content": "Wichtige Punkte aus dem Team-Meeting:\n- Neues Feature implementieren\n- Code Review bis Freitag\n- Tests schreiben",
+      "url": "",
+      "notes": "Wöchentliches Team-Meeting vom 15.01.2024",
+      "folderId": "folder-001",
+      "createdAt": "2024-01-15T14:00:00.000Z",
+      "updatedAt": "2024-01-15T14:00:00.000Z"
+    }
+  ],
+  "folders": [
+    {
+      "id": "folder-001",
+      "name": "Persönlich",
+      "order": 0,
+      "createdAt": "2024-01-01T09:00:00.000Z",
+      "updatedAt": "2024-01-01T09:00:00.000Z"
+    },
+    {
+      "id": "folder-002",
+      "name": "Arbeit",
+      "order": 1,
+      "createdAt": "2024-01-01T09:01:00.000Z",
+      "updatedAt": "2024-01-01T09:01:00.000Z"
+    }
+  ]
+}

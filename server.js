@@ -53,7 +53,7 @@ app.use(session({
         path: process.env.ELECTRON === 'true' 
             ? path.join(process.env.DATA_DIR || path.join(__dirname, 'data'), 'sessions')
             : path.join(__dirname, 'data', 'sessions'),
-        ttl: 24 * 60 * 60, // 24 hours in seconds
+        ttl: 5 * 60, // 5 minutes in seconds
         reapInterval: 60 * 60, // Clean up expired sessions every hour
         logFn: (message) => {
             // Log all session messages in distributed app for debugging
@@ -78,7 +78,7 @@ app.use(session({
         secure: process.env.ELECTRON === 'true' ? false : process.env.NODE_ENV === 'production',
         httpOnly: true,
         sameSite: 'lax',
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 5 * 60 * 1000, // 5 minutes for auto-logout
         // Better cookie handling for Electron
         domain: process.env.ELECTRON === 'true' ? 'localhost' : undefined
     }
@@ -221,14 +221,14 @@ const getPerformanceStats = () => {
     };
 };
 
-// Index-basierte Suche
-const buildSearchIndex = (passwords, dataKey) => {
+// Index-basierte Suche für alle Eintragstypen
+const buildSearchIndex = (entries, dataKey) => {
     const indexKey = `index_${dataKey}`;
     const index = new Map();
     
-    passwords.forEach((pwd, idx) => {
-        // Index für Titel (case-insensitive)
-        const titleLower = pwd.title.toLowerCase();
+    entries.forEach((entry, idx) => {
+        // Index für Titel (case-insensitive) - alle Eintragstypen haben einen Titel
+        const titleLower = entry.title.toLowerCase();
         const titleWords = titleLower.split(/\s+/);
         titleWords.forEach(word => {
             if (word.length > 2) { // Nur Wörter mit mehr als 2 Zeichen indexieren
@@ -237,18 +237,68 @@ const buildSearchIndex = (passwords, dataKey) => {
             }
         });
         
-        // Index für Benutzername (case-insensitive)
-        const usernameLower = pwd.username.toLowerCase();
-        if (usernameLower.length > 2) {
-            if (!index.has(usernameLower)) index.set(usernameLower, new Set());
-            index.get(usernameLower).add(idx);
+        const entryType = entry.type || 'password';
+        
+        // Typ-spezifische Indexierung
+        switch(entryType) {
+            case 'password':
+                // Index für Benutzername (case-insensitive)
+                if (entry.username) {
+                    const usernameLower = entry.username.toLowerCase();
+                    if (usernameLower.length > 2) {
+                        if (!index.has(usernameLower)) index.set(usernameLower, new Set());
+                        index.get(usernameLower).add(idx);
+                    }
+                }
+                
+                // Index für URL (case-insensitive)
+                if (entry.url) {
+                    const urlLower = entry.url.toLowerCase();
+                    const urlWords = urlLower.split(/[\/\.\-\?=&]/);
+                    urlWords.forEach(word => {
+                        if (word.length > 2) {
+                            if (!index.has(word)) index.set(word, new Set());
+                            index.get(word).add(idx);
+                        }
+                    });
+                }
+                break;
+                
+            case 'note':
+                // Index für Notizinhalt (case-insensitive)
+                if (entry.content) {
+                    const contentLower = entry.content.toLowerCase();
+                    const contentWords = contentLower.split(/\s+/);
+                    contentWords.forEach(word => {
+                        if (word.length > 2) {
+                            if (!index.has(word)) index.set(word, new Set());
+                            index.get(word).add(idx);
+                        }
+                    });
+                }
+                break;
+                
+            case 'website':
+            case 'link':
+                // Index für URL (case-insensitive)
+                if (entry.url) {
+                    const urlLower = entry.url.toLowerCase();
+                    const urlWords = urlLower.split(/[\/\.\-\?=&]/);
+                    urlWords.forEach(word => {
+                        if (word.length > 2) {
+                            if (!index.has(word)) index.set(word, new Set());
+                            index.get(word).add(idx);
+                        }
+                    });
+                }
+                break;
         }
         
-        // Index für URL (case-insensitive)
-        if (pwd.url) {
-            const urlLower = pwd.url.toLowerCase();
-            const urlWords = urlLower.split(/[\/\.\-\?=&]/);
-            urlWords.forEach(word => {
+        // Index für Notizen (alle Eintragstypen können Notizen haben)
+        if (entry.notes) {
+            const notesLower = entry.notes.toLowerCase();
+            const notesWords = notesLower.split(/\s+/);
+            notesWords.forEach(word => {
                 if (word.length > 2) {
                     if (!index.has(word)) index.set(word, new Set());
                     index.get(word).add(idx);
@@ -1122,34 +1172,34 @@ class FileManager {
         }
     }
 
-    // Optimierte Suche mit Index
+    // Optimierte Suche mit Index für alle Eintragstypen
     static async searchPasswords(query, keyString, limit = 50) {
         if (!keyString) {
             throw new Error('Master password not set');
         }
 
-        // Lade Passwörter (mit Cache)
-        const passwords = await this.loadAndDecryptPasswordsCached(keyString);
+        // Lade alle Einträge (mit Cache)
+        const entries = await this.loadAndDecryptPasswordsCached(keyString);
         
         if (!query || query.trim().length === 0) {
-            return passwords.slice(0, limit);
+            return entries.slice(0, limit);
         }
 
         // Versuche Index zu verwenden
         let index = getSearchIndex(keyString);
         if (!index) {
-            // Index neu aufbauen
-            index = buildSearchIndex(passwords, keyString);
+            // Index neu aufbauen für alle Eintragstypen
+            index = buildSearchIndex(entries, keyString);
         }
 
         const queryLower = query.toLowerCase();
         const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
         
         if (queryWords.length === 0) {
-            return passwords.slice(0, limit);
+            return entries.slice(0, limit);
         }
 
-        // Suche mit Index
+        // Suche mit Index über alle Eintragstypen
         const resultIndices = new Map();
         
         queryWords.forEach(word => {
@@ -1167,7 +1217,7 @@ class FileManager {
             .map(([idx]) => idx)
             .slice(0, limit);
 
-        return sortedIndices.map(idx => passwords[idx]);
+        return sortedIndices.map(idx => entries[idx]);
     }
 
     // Pagination für große Datenmengen
@@ -1292,6 +1342,50 @@ class FileManager {
     }
 }
 
+// Activity tracking middleware - extends session on any activity
+const trackActivity = (req, res, next) => {
+    if (req.session && req.session.authenticated) {
+        // Update last activity timestamp
+        req.session.lastActivity = new Date().toISOString();
+        
+        // Extend cookie expiration by 5 minutes on any activity
+        req.session.cookie.maxAge = 5 * 60 * 1000; // 5 minutes
+        
+        // Force session save to persist the updated timestamp
+        req.session.save((err) => {
+            if (err) {
+                console.error('Error saving session activity:', err);
+            }
+        });
+    }
+    next();
+};
+
+// Session timeout check middleware
+const checkSessionTimeout = (req, res, next) => {
+    if (req.session && req.session.authenticated && req.session.lastActivity) {
+        const now = new Date();
+        const lastActivity = new Date(req.session.lastActivity);
+        const timeDiff = now - lastActivity;
+        const timeoutMs = 5 * 60 * 1000; // 5 minutes in milliseconds
+        
+        if (timeDiff > timeoutMs) {
+            // Session has timed out
+            req.session.destroy((err) => {
+                if (err) {
+                    console.error('Error destroying timed-out session:', err);
+                }
+            });
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+            return res.status(401).json({ 
+                error: 'Session expired due to inactivity. Please login again.',
+                code: 'SESSION_TIMEOUT'
+            });
+        }
+    }
+    next();
+};
+
 // Authentication middleware
 const requireMasterPassword = (req, res, next) => {
     try {
@@ -1314,7 +1408,26 @@ const requireMasterPassword = (req, res, next) => {
     }
 };
 
+// Apply activity tracking and session timeout to all API routes
+app.use('/api', trackActivity);
+app.use('/api', checkSessionTimeout);
+
 // API Routes
+
+// Get app version from package.json
+app.get('/api/version', (req, res) => {
+    try {
+        const packageJson = require('./package.json');
+        res.json({ 
+            version: packageJson.version,
+            name: packageJson.name,
+            description: packageJson.description
+        });
+    } catch (error) {
+        console.error('Error reading package.json:', error);
+        res.status(500).json({ error: 'Could not read version information' });
+    }
+});
 
 // Add new master password
 app.post('/api/add-master-password', async (req, res) => {
@@ -1599,7 +1712,7 @@ app.get('/api/all', requireMasterPassword, async (req, res) => {
     }
 });
 
-// Optimierte Suche nach Passwörtern mit Entry-Type-Support
+// Optimierte Suche nach allen Eintragstypen (Passwörter, Notizen, Links, Webseiten)
 app.get('/api/search', requireMasterPassword, async (req, res) => {
     try {
         const { q: query, limit = 50, type = 'all' } = req.query;
@@ -2067,9 +2180,10 @@ app.get('/api/export', requireMasterPassword, async (req, res) => {
         });
         
         const exportData = {
-            version: '1.3',
+            version: '1.4',
             exportDate: new Date().toISOString(),
-            passwords,
+            entries: passwords, // Alle Eintragstypen (passwords, websites, links, notes)
+            passwords, // Für Rückwärtskompatibilität
             folders: sortedFolders
         };
         
@@ -2087,17 +2201,29 @@ app.get('/api/export', requireMasterPassword, async (req, res) => {
 // Import passwords and folders
 app.post('/api/import', requireMasterPassword, async (req, res) => {
     try {
-        const { passwords, folders } = req.body;
+        const { entries, passwords, folders } = req.body;
         
-        if (!Array.isArray(passwords)) {
+        // Unterstütze sowohl das neue 'entries' als auch das alte 'passwords' Format
+        const entriesToImport = entries || passwords;
+        
+        if (!Array.isArray(entriesToImport)) {
             return res.status(400).json({ error: 'Invalid import data format' });
         }
 
-        // Validate password structure
-        for (const pwd of passwords) {
-            if (!pwd.title || !pwd.username || !pwd.password) {
+        // Validate entry structure (unterschiedlich je nach Typ)
+        for (const entry of entriesToImport) {
+            if (!entry.title) {
                 return res.status(400).json({ 
-                    error: 'Invalid password entry: title, username, and password are required' 
+                    error: 'Invalid entry: title is required' 
+                });
+            }
+            
+            const type = entry.type || 'password'; // Standard für Rückwärtskompatibilität
+            
+            // Validiere typ-spezifische Felder
+            if (type === 'password' && (!entry.username || !entry.password)) {
+                return res.status(400).json({ 
+                    error: 'Invalid password entry: username and password are required' 
                 });
             }
         }
@@ -2158,27 +2284,46 @@ app.post('/api/import', requireMasterPassword, async (req, res) => {
             // Non-fatal: if anything goes wrong, we just skip remapping
         }
 
-        // Add IDs to imported passwords if missing
-        const processedPasswords = passwords.map(pwd => {
-            const mappedFolderId = (pwd.folderId && folderIdRemap.has(pwd.folderId))
-                ? folderIdRemap.get(pwd.folderId)
-                : pwd.folderId;
+        // Add IDs to imported entries if missing und normalisiere Typ
+        const processedEntries = entriesToImport.map(entry => {
+            const mappedFolderId = (entry.folderId && folderIdRemap.has(entry.folderId))
+                ? folderIdRemap.get(entry.folderId)
+                : entry.folderId;
 
             return {
-                ...pwd,
-                id: pwd.id || uuidv4(),
+                ...entry,
+                id: entry.id || uuidv4(),
+                type: entry.type || 'password', // Standard-Typ für Rückwärtskompatibilität
                 folderId: typeof mappedFolderId === 'string' ? mappedFolderId : (mappedFolderId ?? null),
-                createdAt: pwd.createdAt || new Date().toISOString(),
+                createdAt: entry.createdAt || new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
         });
 
         const dataKey = getMasterPassword(req);
-        await FileManager.encryptAndSavePasswords(processedPasswords, dataKey);
+        await FileManager.addMultiplePasswords(processedEntries, dataKey);
+        
+        // Zähle verschiedene Eintragstypen für bessere Antwort
+        const typeCounts = processedEntries.reduce((acc, entry) => {
+            acc[entry.type] = (acc[entry.type] || 0) + 1;
+            return acc;
+        }, {});
+        
+        const typeNames = {
+            'password': 'passwords',
+            'website': 'websites',
+            'link': 'links',
+            'note': 'notes'
+        };
+        
+        const countMessages = Object.entries(typeCounts).map(([type, count]) => 
+            `${count} ${typeNames[type] || type}`
+        ).join(', ');
         
         const importResult = { 
-            message: 'Data imported successfully', 
-            passwordsCount: processedPasswords.length,
+            message: `Data imported successfully: ${countMessages}`, 
+            entriesCount: processedEntries.length,
+            typeCounts,
             foldersCount: folders && Array.isArray(folders) ? folders.length : 0
         };
         

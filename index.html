@@ -44,7 +44,7 @@
 
         .app-version {
             position: fixed;
-            top: 12px;
+            top: 52px;
             right: 12px;
             background: #f3f4f6;
             color: #6b7280;
@@ -55,6 +55,51 @@
             z-index: 1000;
             font-variant-numeric: tabular-nums;
             -webkit-app-region: no-drag; /* 🚫 Version-Badge nicht drag-bar */
+        }
+
+        .top-actions {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            left: auto;
+            display: flex;
+            gap: 2px;
+            z-index: 1000;
+            -webkit-app-region: no-drag;
+        }
+
+        .btn-fresh {
+            background: #1a1a1a !important;
+            color: white !important;
+            border: none !important;
+            padding: 8px 16px !important;
+            border-radius: 6px !important;
+            font-size: 13px !important;
+            font-weight: 500 !important;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            width: auto !important;
+        }
+
+        .btn-fresh:hover {
+            background: #000000 !important;
+            transform: translateY(-1px);
+        }
+
+        .btn-fresh.btn-secondary {
+            background: #6b7280 !important;
+        }
+
+        .btn-fresh.btn-secondary:hover {
+            background: #4b5563 !important;
+        }
+
+        .btn-fresh.btn-logout {
+            background: #dc2626 !important;
+        }
+
+        .btn-fresh.btn-logout:hover {
+            background: #b91c1c !important;
         }
 
         .header h1 {
@@ -275,7 +320,8 @@
 
         /* Custom dropdown styling for better design integration */
         .sort-box select option,
-        .folder-box select option {
+        .folder-box select option,
+        .type-filter-box select option {
             background: #ffffff;
             color: #111827;
             padding: 12px 16px;
@@ -284,11 +330,13 @@
         }
 
         .sort-box select option:hover,
-        .folder-box select option:hover {
+        .folder-box select option:hover,
+        .type-filter-box select option:hover {
             background: #f3f4f6;
         }
 
-        .sort-box select option:checked {
+        .sort-box select option:checked,
+        .type-filter-box select option:checked {
             background: #1a1a1a;
             color: #ffffff;
         }
@@ -423,15 +471,30 @@
 
         /* Type filter box styling - Mobile fallback */
         .type-filter-box {
-            margin-right: 8px;
+            min-width: 180px;
         }
         
         .type-filter-box select {
-            padding: 8px 12px;
+            width: 100%;
+            padding: 12px 40px 12px 16px;
             border: 1px solid #d1d5db;
-            border-radius: 6px;
+            border-radius: 8px;
+            font-size: 15px;
             background: #ffffff;
-            font-size: 14px;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M6 8l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 20px 20px;
+            cursor: pointer;
+        }
+
+        .type-filter-box select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
         /* Responsive visibility controls */
@@ -470,24 +533,7 @@
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
         }
 
-        .header-actions {
-            position: absolute;
-            top: 24px;
-            right: 24px;
-        }
 
-        .header-actions .btn {
-            padding: 8px 16px;
-            font-size: 14px;
-            background: transparent;
-            color: #6b7280;
-            border: 1px solid #d1d5db;
-        }
-
-        .header-actions .btn:hover {
-            background: #f9fafb;
-            color: #374151;
-        }
 
         .passwords-list {
             margin-bottom: 40px;
@@ -781,6 +827,61 @@
             border: 1px solid #e5e7eb;
         }
 
+        /* New layout for URL fields with actions */
+        .password-field .value-with-actions {
+            background: #f9fafb;
+            border-radius: 6px;
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            border: 1px solid #e5e7eb;
+            overflow: hidden;
+        }
+
+        .password-field .value-content {
+            padding: 10px 14px;
+            background: #f9fafb;
+        }
+
+        .password-field .value-content input {
+            background: transparent;
+            border: none;
+            font-family: inherit;
+            font-size: 14px;
+            width: 100%;
+            outline: none;
+            color: #111827;
+        }
+
+        .password-field .value-actions {
+            background: #f1f5f9;
+            padding: 8px 14px;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .password-field .value-actions .copy-btn {
+            background: #fff;
+            border: 1px solid #d1d5db;
+            color: #374151;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-weight: 500;
+        }
+
+        .password-field .value-actions .copy-btn:hover {
+            background: #f9fafb;
+            border-color: #9ca3af;
+            transform: translateY(-1px);
+        }
+
+        .password-field .value-actions .copy-btn:active {
+            transform: translateY(0);
+        }
+
         /* Nicer select styling for folder dropdowns */
         .password-field .value select {
             -webkit-appearance: none;
@@ -992,10 +1093,85 @@
         .strength-medium { background: #ffc107; }
         .strength-strong { background: #28a745; }
 
+        /* Folder modal styling */
+        .folders-modal-content {
+            max-width: 560px;
+        }
+
+        .folder-input-group {
+            display: flex;
+            gap: 8px;
+            align-items: end;
+        }
+
+        .folder-input-group input {
+            flex: 1;
+        }
+
+        .folder-input-group button {
+            width: auto;
+            white-space: nowrap;
+        }
+
+        /* Folder list items - responsive design */
+        .folder-item {
+            transition: background-color 0.2s ease;
+        }
+
+        .folder-item:hover {
+            background-color: #f9fafb;
+        }
+
+        /* Desktop: horizontal layout for folder items */
+        @media (min-width: 769px) {
+            .folder-item {
+                display: flex !important;
+                align-items: center !important;
+                gap: 12px !important;
+                padding: 12px 0 !important;
+            }
+
+            .folder-item input {
+                flex: 1 !important;
+                margin-bottom: 0 !important;
+            }
+
+            .folder-button-group {
+                flex-shrink: 0 !important;
+            }
+
+            .folder-button-group button {
+                flex: none !important;
+                width: auto !important;
+                min-width: 100px !important;
+            }
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
             }
+
+            .top-actions {
+                position: static !important;
+                justify-content: center;
+                margin-bottom: 16px;
+                margin-top: 16px;
+                right: auto !important;
+                left: auto !important;
+            }
+
+            .app-version {
+                position: static !important;
+                order: 2;
+                margin-top: 8px;
+                margin-bottom: 16px;
+                align-self: center;
+            }
+
+
+
+
 
             .toolbar-row {
                 flex-direction: column;
@@ -1007,13 +1183,75 @@
                 width: 100%;
             }
 
-            /* Mobile: Hide desktop type filter and show dropdown */
+            /* Mobile: Hide desktop type filter and show tiles */
             .desktop-only {
                 display: none !important;
             }
             
             .mobile-only {
                 display: block !important;
+            }
+
+            /* Mobile Type Filter Tiles */
+            .type-filter-tiles {
+                display: flex !important;
+                gap: 6px;
+                margin-bottom: 16px;
+                overflow-x: auto;
+                padding: 2px;
+            }
+
+            .type-tile {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-width: 60px;
+                padding: 12px 8px;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
+                background: #ffffff;
+                color: #6b7280;
+                font-size: 11px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .type-tile:hover {
+                background: #f9fafb;
+                border-color: #9ca3af;
+            }
+
+            .type-tile.active {
+                background: #111827;
+                color: #ffffff;
+                border-color: #111827;
+            }
+
+            .type-tile span {
+                margin-top: 4px;
+                font-size: 10px;
+                line-height: 1.2;
+                text-align: center;
+            }
+
+            /* Mobile: Make all dropdowns consistent width */
+            .type-filter-box,
+            .folder-box,
+            .sort-box {
+                min-width: unset;
+                width: 100%;
+                margin-bottom: 12px;
+            }
+
+            .type-filter-box select,
+            .folder-box select,
+            .sort-box select {
+                width: 100%;
+                box-sizing: border-box;
             }
 
             .btn-group {
@@ -1053,6 +1291,72 @@
                 margin: 10% auto;
                 width: 95%;
                 padding: 20px;
+            }
+
+            /* Folders modal specific mobile optimizations */
+            .folders-modal-content {
+                max-width: none !important;
+                margin: 5% auto;
+                max-height: 85vh;
+            }
+
+            .folder-input-group {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .folder-input-group input {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .folder-input-group button {
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            /* Mobile folder list optimizations */
+            .folder-item {
+                padding: 12px 0 !important;
+            }
+
+            .folder-item input {
+                font-size: 16px !important; /* Prevent zoom on iOS */
+                margin-bottom: 8px !important;
+            }
+
+            .folder-button-group {
+                gap: 6px !important;
+            }
+
+            .folder-button-group button {
+                padding: 8px 12px !important;
+                font-size: 13px !important;
+                min-height: 36px; /* Minimum touch target */
+            }
+
+            /* Mobile optimizations for new action buttons layout */
+            .password-field .value-actions {
+                flex-direction: column;
+                gap: 6px;
+                align-items: stretch;
+            }
+
+            .password-field .value-actions .copy-btn {
+                width: 100%;
+                justify-content: center;
+                padding: 8px 12px;
+                font-size: 14px;
+                min-height: 44px; /* Better touch target */
+            }
+
+            .password-field .value-content {
+                padding: 12px 14px;
+            }
+
+            .password-field .value-content input {
+                font-size: 16px; /* Prevent zoom on iOS */
             }
         }
 
@@ -1207,7 +1511,18 @@
 </head>
 <body>
     <!-- App Version Display -->
-    <div class="app-version" id="appVersion">v1.8.7</div>
+    <div class="app-version" id="appVersion">v...</div>
+    
+    <!-- Top Action Buttons -->
+    <div class="top-actions" id="topActions" style="display: none;">
+        <button class="btn btn-fresh" onclick="showAddPasswordModal()">+ Neuer Eintrag</button>
+        <button class="btn btn-fresh btn-secondary" id="manageFoldersBtn">Ordner verwalten</button>
+        <button class="btn btn-fresh btn-logout" onclick="logout()">Logout</button>
+        <!-- Session Timer Display -->
+        <div id="sessionTimer" style="margin-top: 5px; text-align: right; color: #666; font-size: 12px; display: none;">
+            🕐 Session: <span id="sessionTimeLeft">1:00</span>
+        </div>
+    </div>
     
     <!-- Initial Loading Screen -->
     <div class="initial-loading" id="initialLoading">
@@ -1220,11 +1535,6 @@
 
     <div class="container">
         <div class="header">
-            <h1>Passwort Manager</h1>
-            <p>Sicher und minimalistisch</p>
-            <div class="header-actions" id="headerActions" style="display: none;">
-                <button class="btn" onclick="logout()">Logout</button>
-            </div>
         </div>
 
         <!-- Login Screen -->
@@ -1284,15 +1594,23 @@
 
                 <!-- Zeile 2: Dropdowns + Buttons (linksbündig) -->
                 <div class="toolbar-row toolbar-row-2">
-                    <!-- Type Filter - Mobile Version -->
-                    <div class="type-filter-box mobile-only">
-                        <select id="typeFilter" onchange="passwordManager.filterByType(this.value)" aria-label="Eintrag-Typ filtern">
-                            <option value="all">🗂️ Alle Typen</option>
-                            <option value="password">🔐 Passwörter</option>
-                            <option value="website">🌐 Webseiten</option>
-                            <option value="link">🔗 Links</option>
-                            <option value="note">📝 Notizen</option>
-                        </select>
+                    <!-- Type Filter - Mobile Version: Tile Grid -->
+                    <div class="type-filter-tiles mobile-only">
+                        <button class="type-tile active" data-type="all" onclick="passwordManager.filterByType('all')">
+                            🗂️<span>Alle</span>
+                        </button>
+                        <button class="type-tile" data-type="password" onclick="passwordManager.filterByType('password')">
+                            🔐<span>Passwörter</span>
+                        </button>
+                        <button class="type-tile" data-type="website" onclick="passwordManager.filterByType('website')">
+                            🌐<span>Webseiten</span>
+                        </button>
+                        <button class="type-tile" data-type="link" onclick="passwordManager.filterByType('link')">
+                            🔗<span>Links</span>
+                        </button>
+                        <button class="type-tile" data-type="note" onclick="passwordManager.filterByType('note')">
+                            📝<span>Notizen</span>
+                        </button>
                     </div>
                     
                     <div class="folder-box">
@@ -1309,10 +1627,7 @@
                         </select>
                     </div>
                     
-                    <div class="btn-group">
-                        <button class="btn" onclick="showAddPasswordModal()">+ Neuer Eintrag</button>
-                        <button class="btn btn-secondary" id="manageFoldersBtn">Ordner verwalten</button>
-                    </div>
+
                 </div>
             </div>
 
@@ -1494,14 +1809,14 @@
 
     <!-- Folders Modal -->
     <div id="foldersModal" class="modal">
-        <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-content folders-modal-content">
             <span class="close" onclick="closeModal('foldersModal')">&times;</span>
             <h2>📁 Ordner verwalten</h2>
             <div class="form-group" style="margin-bottom: 16px;">
                 <label for="newFolderName">Neuer Ordnername:</label>
-                <div style="display:flex; gap:8px;">
+                <div class="folder-input-group">
                     <input type="text" id="newFolderName" placeholder="z.B. E-Mail, Banking, Arbeit">
-                    <button class="btn" id="createFolderBtn" style="width:auto;">Hinzufügen</button>
+                    <button class="btn" id="createFolderBtn">Hinzufügen</button>
                 </div>
             </div>
             <div id="foldersList"></div>
@@ -1686,12 +2001,57 @@
                 this.folders = [];
                 this.selectedFolderId = 'all';
                 this.selectedEntryType = 'all'; // Default to show all entry types
-                this.cachedMasterPassword = null; // in-memory only, to transparently re-login on 401
+                this.cachedMasterPassword = null; // Will be loaded in init()
+                this.sessionTimer = null; // for countdown display
+                this.sessionWarningShown = false;
                 this.init();
             }
 
             init() {
+                // Load cached password on initialization
+                this.loadCachedPasswordOnInit();
                 this.setupEventListeners();
+                
+                // Load app version
+                this.loadAppVersion();
+            }
+
+            loadCachedPasswordOnInit() {
+                try {
+                    const cached = sessionStorage.getItem('pwa_cached_mp');
+                    const timestamp = sessionStorage.getItem('pwa_session_timestamp');
+                    
+                    console.log('🔍 Loading cached password on init:', { 
+                        hasCached: !!cached, 
+                        hasTimestamp: !!timestamp,
+                        timestamp: timestamp 
+                    });
+                    
+                    if (cached && timestamp) {
+                        const age = Date.now() - parseInt(timestamp);
+                        const maxAge = 30 * 60 * 1000; // 30 minutes
+                        
+                        console.log('📅 Cache age check:', { 
+                            age: Math.round(age / 1000), 
+                            maxAge: Math.round(maxAge / 1000),
+                            valid: age <= maxAge 
+                        });
+                        
+                        if (age <= maxAge) {
+                            this.cachedMasterPassword = atob(cached);
+                            console.log('✅ Cached password loaded successfully on init');
+                        } else {
+                            // Clear expired cache
+                            sessionStorage.removeItem('pwa_cached_mp');
+                            sessionStorage.removeItem('pwa_session_timestamp');
+                            console.log('🗑️ Cleared expired cache');
+                        }
+                    } else {
+                        console.log('❌ No cached password found on init');
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Could not load cached password on init:', error);
+                }
             }
 
             async ensureMode() {
@@ -1876,18 +2236,34 @@
                 }
                 
                 // Try transparent re-login using cached password (memory only)
+                // Try to get cached password if not in memory
+                if (!this.cachedMasterPassword) {
+                    this.cachedMasterPassword = this.getCachedPassword();
+                }
+                
                 if (!this.cachedMasterPassword) {
                     console.log('No cached master password available for re-login');
                     return false;
                 }
                 
                 try {
+                    console.log('Attempting transparent re-login...');
                     await this.verifyMasterPassword(this.cachedMasterPassword);
+                    
+                    // Reinitialize activity tracking after successful re-login
+                    this.initActivityTracking();
+                    
+                    // Restart session timer
+                    this.startSessionTimer();
+                    
                     // Give the server a moment to save session to store
                     await new Promise(r => setTimeout(r, 25));
+                    console.log('Transparent re-login successful');
                     return true;
                 } catch (error) {
                     console.error('Error during transparent re-login:', error);
+                    // Clear cached password if re-login fails
+                    this.clearCachedPassword();
                     return false;
                 }
             }
@@ -1952,6 +2328,405 @@
                 } catch (error) {
                     console.error('Error checking session status:', error);
                     return false;
+                }
+            }
+
+            // Initialize activity tracking for session extension
+            initActivityTracking() {
+                if (this.localMode) return;
+                
+                // Track various user activities
+                const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+                let lastActivityTime = Date.now();
+                
+                const handleActivity = () => {
+                    const now = Date.now();
+                    // Only track activity if it's been more than 10 seconds since last track
+                    // This prevents excessive API calls
+                    if (now - lastActivityTime > 10000) {
+                        lastActivityTime = now;
+                        this.extendSession();
+                        this.resetSessionTimer(); // Reset timer on activity
+                    }
+                };
+                
+                // Add event listeners for activity tracking
+                activityEvents.forEach(event => {
+                    document.addEventListener(event, handleActivity, { passive: true });
+                });
+                
+                console.log('Activity tracking initialized for session extension');
+            }
+
+            // Extend session on user activity
+            async extendSession() {
+                if (this.localMode || !this.isAuthenticated) return;
+                
+                try {
+                    // Simple API call to extend session - the middleware will handle the extension
+                    const response = await fetch(`${this.apiBase}/session-status`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (response.ok) {
+                        console.log('Session extended successfully');
+                    } else if (response.status === 401) {
+                        console.warn('Session extension failed - session may have expired');
+                        // Try transparent re-login
+                        const relogged = await this.ensureAuthenticatedOrReLogin();
+                        if (!relogged) {
+                            console.warn('Re-login failed, user may need to manually log in again');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error extending session:', error);
+                }
+            }
+
+            // Secure password caching for session persistence
+            setCachedPassword(password) {
+                if (!password) {
+                    console.warn('⚠️ Tried to cache empty password');
+                    return;
+                }
+                try {
+                    // Store encrypted in sessionStorage (survives refresh, not tab close)
+                    const timestamp = Date.now().toString();
+                    sessionStorage.setItem('pwa_cached_mp', btoa(password));
+                    sessionStorage.setItem('pwa_session_timestamp', timestamp);
+                    
+                    // Also store in localStorage as backup (survives browser restart)
+                    localStorage.setItem('pwa_cached_mp_backup', btoa(password));
+                    localStorage.setItem('pwa_session_timestamp_backup', timestamp);
+                    
+                    console.log('💾 Password cached for session persistence:', {
+                        timestamp: timestamp,
+                        cachedLength: password.length,
+                        sessionStorageSize: sessionStorage.length,
+                        localStorageBackup: true
+                    });
+                } catch (error) {
+                    console.warn('⚠️ Could not cache password:', error);
+                }
+            }
+
+            getCachedPassword() {
+                try {
+                    // Try sessionStorage first (survives page refresh)
+                    let cached = sessionStorage.getItem('pwa_cached_mp');
+                    let timestamp = sessionStorage.getItem('pwa_session_timestamp');
+                    
+                    // If not found in sessionStorage, try localStorage backup
+                    if (!cached || !timestamp) {
+                        cached = localStorage.getItem('pwa_cached_mp_backup');
+                        timestamp = localStorage.getItem('pwa_session_timestamp_backup');
+                        
+                        // If found in localStorage, restore to sessionStorage for next time
+                        if (cached && timestamp) {
+                            sessionStorage.setItem('pwa_cached_mp', cached);
+                            sessionStorage.setItem('pwa_session_timestamp', timestamp);
+                            console.log('🔄 Restored cached password from localStorage backup');
+                        }
+                    }
+                    
+                    if (!cached || !timestamp) return null;
+                    
+                    // Check if cache is not older than 1 minute (for testing)
+                    const age = Date.now() - parseInt(timestamp);
+                    const maxAge = 1 * 60 * 1000; // 1 minute
+                    
+                    if (age > maxAge) {
+                        this.clearCachedPassword();
+                        return null;
+                    }
+                    
+                    return atob(cached);
+                } catch (error) {
+                    console.warn('Could not retrieve cached password:', error);
+                    return null;
+                }
+            }
+
+            clearCachedPassword() {
+                try {
+                    sessionStorage.removeItem('pwa_cached_mp');
+                    sessionStorage.removeItem('pwa_session_timestamp');
+                    localStorage.removeItem('pwa_cached_mp_backup');
+                    localStorage.removeItem('pwa_session_timestamp_backup');
+                    this.cachedMasterPassword = null;
+                    console.log('🗑️ Cleared all cached passwords');
+                } catch (error) {
+                    console.warn('Could not clear cached password:', error);
+                }
+            }
+
+            // Session countdown timer like banking apps
+            startSessionTimer() {
+                // Now works for both local and server mode
+                this.stopSessionTimer(); // Clear any existing timer
+                
+                const sessionDuration = 1 * 60 * 1000; // 1 minute in ms (for testing)
+                const warningTime = 30 * 1000; // Show warning 30 seconds before
+                
+                this.sessionDuration = sessionDuration; // Store for reset
+                this.timeRemaining = sessionDuration;
+                this.lastActivityTime = Date.now(); // Track last activity
+                
+                this.sessionTimer = setInterval(() => {
+                    this.timeRemaining -= 1000;
+                    
+                    // Update session display every second
+                    this.updateSessionDisplay();
+                    
+                    // Show warning when 30 seconds left
+                    if (this.timeRemaining <= warningTime && !this.sessionWarningShown) {
+                        this.showSessionWarning(Math.ceil(this.timeRemaining / 1000));
+                        this.sessionWarningShown = true;
+                    }
+                    
+                    // Update timer display if warning is shown
+                    if (this.sessionWarningShown) {
+                        this.updateSessionWarning(Math.ceil(this.timeRemaining / 1000));
+                    }
+                    
+                    // Session expired
+                    if (this.timeRemaining <= 0) {
+                        this.handleSessionTimeout();
+                    }
+                }, 1000);
+                
+                console.log('Session timer started (1 minute for testing)');
+                this.showSessionIndicator();
+                
+                // Set up activity tracking to reset timer
+                this.setupActivityTracking();
+            }
+
+            stopSessionTimer() {
+                if (this.sessionTimer) {
+                    clearInterval(this.sessionTimer);
+                    this.sessionTimer = null;
+                }
+                this.sessionWarningShown = false;
+                this.hideSessionWarning();
+                this.hideSessionIndicator();
+            }
+
+            resetSessionTimer() {
+                if (this.isAuthenticated) {
+                    // Reset the timer to full duration on activity
+                    this.timeRemaining = this.sessionDuration;
+                    this.lastActivityTime = Date.now();
+                    this.sessionWarningShown = false;
+                    this.hideSessionWarning();
+                    
+                    // Update cache timestamp to extend auto-login
+                    this.updateCacheTimestamp();
+                    
+                    console.log('Session timer reset to 1 minute due to activity');
+                }
+            }
+            
+            // Update cache timestamp to extend auto-login duration
+            updateCacheTimestamp() {
+                try {
+                    const timestamp = Date.now().toString();
+                    if (sessionStorage.getItem('pwa_cached_mp')) {
+                        sessionStorage.setItem('pwa_session_timestamp', timestamp);
+                    }
+                    if (localStorage.getItem('pwa_cached_mp_backup')) {
+                        localStorage.setItem('pwa_session_timestamp_backup', timestamp);
+                    }
+                } catch (error) {
+                    console.warn('Could not update cache timestamp:', error);
+                }
+            }
+            
+            // Setup activity tracking for timer reset
+            setupActivityTracking() {
+                if (this.activityListenersSetup) return; // Avoid duplicate listeners
+                
+                const activityEvents = ['click', 'keydown', 'mousemove', 'scroll', 'touchstart', 'focus'];
+                const resetTimer = () => {
+                    // Throttle resets to once per 5 seconds to avoid excessive updates
+                    const now = Date.now();
+                    if (now - this.lastActivityTime > 5000) { // 5 second throttle
+                        this.resetSessionTimer();
+                    }
+                };
+                
+                activityEvents.forEach(event => {
+                    document.addEventListener(event, resetTimer, { passive: true });
+                });
+                
+                this.activityListenersSetup = true;
+                console.log('Activity tracking setup for session timer reset');
+            }
+
+            showSessionWarning(secondsLeft) {
+                // Create or update session warning modal
+                let modal = document.getElementById('sessionWarningModal');
+                if (!modal) {
+                    modal = document.createElement('div');
+                    modal.id = 'sessionWarningModal';
+                    modal.innerHTML = `
+                        <div class="modal-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                            <div class="modal-content" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 400px; text-align: center;">
+                                <h3 style="color: #d32f2f; margin-bottom: 15px;">⚠️ Session läuft ab</h3>
+                                <p id="sessionTimeLeft" style="margin-bottom: 20px;">Ihre Sitzung läuft in <span id="timeCounter">${secondsLeft}</span> Sekunden ab.</p>
+                                <div style="display: flex; gap: 10px; justify-content: center;">
+                                    <button id="extendSessionBtn" class="btn btn-primary" style="background: #1976d2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Session verlängern</button>
+                                    <button id="logoutNowBtn" class="btn btn-secondary" style="background: #757575; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">Jetzt abmelden</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(modal);
+                    
+                    // Event listeners
+                    document.getElementById('extendSessionBtn').addEventListener('click', () => {
+                        this.extendSession();
+                        this.hideSessionWarning();
+                        this.resetSessionTimer();
+                        this.sessionWarningShown = false;
+                    });
+                    
+                    document.getElementById('logoutNowBtn').addEventListener('click', () => {
+                        this.logout();
+                    });
+                }
+            }
+
+            updateSessionWarning(secondsLeft) {
+                const counter = document.getElementById('timeCounter');
+                if (counter) {
+                    counter.textContent = secondsLeft;
+                }
+            }
+
+            hideSessionWarning() {
+                const modal = document.getElementById('sessionWarningModal');
+                if (modal) {
+                    modal.remove();
+                }
+                this.sessionWarningShown = false;
+            }
+
+            showSessionIndicator() {
+                // Show the simple timer display under logout button
+                const sessionTimer = document.getElementById('sessionTimer');
+                const sessionTimeLeft = document.getElementById('sessionTimeLeft');
+                if (sessionTimer && sessionTimeLeft) {
+                    sessionTimer.style.display = 'block';
+                    this.updateSessionDisplay();
+                }
+            }
+            
+            updateSessionDisplay() {
+                const sessionTimeLeft = document.getElementById('sessionTimeLeft');
+                
+                if (!sessionTimeLeft) return;
+                
+                // If timeRemaining is not set, show default
+                if (!this.timeRemaining || this.timeRemaining <= 0) {
+                    sessionTimeLeft.textContent = '1:00';
+                    return;
+                }
+                
+                const minutes = Math.floor(this.timeRemaining / 60000);
+                const seconds = Math.floor((this.timeRemaining % 60000) / 1000);
+                const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                sessionTimeLeft.textContent = timeText;
+                
+                // Change color when time is running low
+                const sessionTimer = document.getElementById('sessionTimer');
+                if (sessionTimer) {
+                    if (this.timeRemaining <= 30000) { // Last 30 seconds
+                        sessionTimer.style.color = '#dc3545'; // Red
+                    } else {
+                        sessionTimer.style.color = '#666'; // Normal gray
+                    }
+                }
+                
+                console.log(`Timer updated: ${timeText} (${this.timeRemaining}ms remaining)`);
+            }
+
+            hideSessionIndicator() {
+                const sessionTimer = document.getElementById('sessionTimer');
+                if (sessionTimer) {
+                    sessionTimer.style.display = 'none';
+                }
+            }
+
+            handleSessionTimeout() {
+                console.log('Session timeout - logging out user');
+                this.stopSessionTimer();
+                this.hideSessionWarning();
+                this.hideSessionIndicator(); // Hide the timer display
+                this.clearCachedPassword();
+                
+                // Force logout and redirect to login screen immediately
+                this.isAuthenticated = false;
+                this.masterPassword = null;
+                this.currentMasterPassword = null;
+                
+                // Reset UI immediately
+                document.getElementById('mainContent').style.display = 'none';
+                document.getElementById('topActions').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'block';
+                
+                console.log('User automatically logged out due to session timeout');
+            }
+
+            logout() {
+                this.stopSessionTimer();
+                this.hideSessionIndicator(); // Hide the timer display
+                this.clearCachedPassword();
+                this.isAuthenticated = false;
+                this.masterPassword = null;
+                this.currentMasterPassword = null;
+                
+                // Reset UI
+                document.getElementById('mainContent').style.display = 'none';
+                document.getElementById('topActions').style.display = 'none';
+                document.getElementById('loginScreen').style.display = 'block';
+                
+                console.log('User logged out');
+            }
+
+            // Load app version from package.json via API or use constant
+            async loadAppVersion() {
+                const versionElement = document.getElementById('appVersion');
+                if (!versionElement) return;
+                
+                try {
+                    await this.ensureMode();
+                    
+                    if (this.localMode) {
+                        // In local mode, use the APP_VERSION constant
+                        versionElement.textContent = `v${APP_VERSION}`;
+                        console.log(`📦 App version (local): v${APP_VERSION}`);
+                        return;
+                    }
+                    
+                    // Try to load version from API in server mode
+                    const response = await fetch(`${this.apiBase}/version`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.version) {
+                            versionElement.textContent = `v${data.version}`;
+                            console.log(`📦 App version (server): v${data.version}`);
+                            return;
+                        }
+                    }
+                    
+                    throw new Error('Version API not available');
+                } catch (error) {
+                    console.warn('Could not load app version from server, using constant:', error);
+                    // Fallback to constant
+                    versionElement.textContent = `v${APP_VERSION}`;
+                    console.log(`📦 App version (fallback): v${APP_VERSION}`);
                 }
             }
 
@@ -2126,6 +2901,11 @@
                             const dataKeyHex = await unwrapDataKeyWithPassword(password, mp.salt, mp.wrappedDataKey, mp.wrapIv);
                             this.dataKeyHex = dataKeyHex;
                             this.isAuthenticated = true;
+                            
+                            // Cache the password for auto-login even in local mode
+                            this.cachedMasterPassword = password;
+                            this.setCachedPassword(password);
+                            
                             return { masterPassword: { id: mp.id, name: mp.name } };
                         }
                     }
@@ -2176,6 +2956,8 @@
                             err.message = 'Verknüpfung erforderlich. Bitte bestätigen Sie mit einem bestehenden Master-Passwort.';
                         } else if (error.code === 'MIGRATION_CONFIRM_REQUIRED') {
                             err.message = 'Migration erforderlich. Bitte bestätigen Sie mit einem bestehenden Master-Passwort.';
+                        } else if (error.code === 'SESSION_TIMEOUT') {
+                            err.message = 'Ihre Sitzung ist aufgrund von Inaktivität abgelaufen. Bitte melden Sie sich erneut an.';
                         }
                         
                         throw err;
@@ -2186,8 +2968,9 @@
                     this.currentMasterPassword = result.masterPassword;
                     this.isAuthenticated = true;
                     
-                    // Cache the password for transparent re-login
+                    // Cache the password for transparent re-login (session-persistent)
                     this.cachedMasterPassword = password;
+                    this.setCachedPassword(password);
                     
                     return result
                 } catch (error) {
@@ -3027,11 +3810,14 @@
                     }
                 });
                 
-                // Update mobile dropdown
-                const mobileSelect = document.getElementById('typeFilter');
-                if (mobileSelect) {
-                    mobileSelect.value = selectedType;
-                }
+                // Update active state for mobile tiles
+                const typeTiles = document.querySelectorAll('.type-tile');
+                typeTiles.forEach(tile => {
+                    tile.classList.remove('active');
+                    if (tile.dataset.type === selectedType) {
+                        tile.classList.add('active');
+                    }
+                });
                 
                 this.renderPasswords();
             }
@@ -3042,22 +3828,40 @@
                 
                 const text = searchTerm.toLowerCase();
                 
-                // If there's a search term, search through ALL passwords regardless of folder
+                // If there's a search term, search through ALL entries regardless of folder
                 if (text.trim()) {
-                    const filtered = this.passwords.filter(password => {
-                        return password.title.toLowerCase().includes(text) ||
-                               password.username.toLowerCase().includes(text) ||
-                               (password.url && password.url.toLowerCase().includes(text));
+                    const filtered = this.passwords.filter(entry => {
+                        // Search in title (all entry types have this)
+                        if (entry.title.toLowerCase().includes(text)) return true;
+                        
+                        // Search in type-specific fields
+                        const entryType = entry.type || 'password';
+                        
+                        switch(entryType) {
+                            case 'password':
+                                return (entry.username && entry.username.toLowerCase().includes(text)) ||
+                                       (entry.url && entry.url.toLowerCase().includes(text));
+                            
+                            case 'note':
+                                return (entry.content && entry.content.toLowerCase().includes(text));
+                            
+                            case 'website':
+                            case 'link':
+                                return (entry.url && entry.url.toLowerCase().includes(text));
+                            
+                            default:
+                                return false;
+                        }
                     });
                     this.renderPasswords(filtered);
                     return;
                 }
                 
                 // If no search term, apply folder filter as normal
-                const filtered = this.passwords.filter(password => {
+                const filtered = this.passwords.filter(entry => {
                     if (this.selectedFolderId === 'all') return true;
-                    if (this.selectedFolderId === 'null') return (password.folderId == null);
-                    return password.folderId === this.selectedFolderId;
+                    if (this.selectedFolderId === 'null') return (entry.folderId == null);
+                    return entry.folderId === this.selectedFolderId;
                 });
                 this.renderPasswords(filtered);
             }
@@ -3193,12 +3997,14 @@
                                     ${url ? `
                                         <div class="password-field">
                                             <label>URL:</label>
-                                            <div class="value">
-                                                <input type="text" value="${url}" readonly>
-                                                <button class="copy-btn" onclick="copyToClipboard('${url}')">Kopieren</button>
-                                                ${type === 'website' || type === 'link' ? `
+                                            <div class="value-with-actions">
+                                                <div class="value-content">
+                                                    <input type="text" value="${url}" readonly>
+                                                </div>
+                                                <div class="value-actions">
+                                                    <button class="copy-btn" onclick="copyToClipboard('${url}')">Kopieren</button>
                                                     <button class="copy-btn" onclick="openEntryUrl('${url}')">🔗 Öffnen</button>
-                                                ` : ''}
+                                                </div>
                                             </div>
                                         </div>
                                     ` : ''}
@@ -3252,17 +4058,25 @@
                         return `
                             <div class="password-field">
                                 <label>Benutzername:</label>
-                                <div class="value">
-                                    <input type="text" value="${username}" readonly>
-                                    <button class="copy-btn" onclick="copyToClipboard('${username}')">Kopieren</button>
+                                <div class="value-with-actions">
+                                    <div class="value-content">
+                                        <input type="text" value="${username}" readonly>
+                                    </div>
+                                    <div class="value-actions">
+                                        <button class="copy-btn" onclick="copyToClipboard('${username}')">Kopieren</button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="password-field">
                                 <label>Passwort:</label>
-                                <div class="value">
-                                    <input type="password" value="${passwordValue}" readonly id="pwd-${entry.id}">
-                                    <button class="copy-btn" onclick="copyToClipboard('${passwordValue}')">Kopieren</button>
-                                    <button class="copy-btn" onclick="togglePasswordVisibility('${entry.id}')">👁️</button>
+                                <div class="value-with-actions">
+                                    <div class="value-content">
+                                        <input type="password" value="${passwordValue}" readonly id="pwd-${entry.id}">
+                                    </div>
+                                    <div class="value-actions">
+                                        <button class="copy-btn" onclick="copyToClipboard('${passwordValue}')">Kopieren</button>
+                                        <button class="copy-btn" onclick="togglePasswordVisibility('${entry.id}')">👁️</button>
+                                    </div>
                                 </div>
                             </div>
                         `;
@@ -3607,9 +4421,10 @@
                     });
                     
                     const exportData = { 
-                        version: '1.3', 
+                        version: '1.4', 
                         exportDate: new Date().toISOString(), 
-                        passwords: vault.passwords || [],
+                        entries: vault.passwords || [], // Alle Eintragstypen (passwords, websites, links, notes)
+                        passwords: vault.passwords || [], // Für Rückwärtskompatibilität
                         folders: sortedFolders
                     };
 
@@ -3621,7 +4436,7 @@
                     const salt = crypto.getRandomValues(new Uint8Array(16));
                     const key = await deriveAesKeyFromString(pass1, salt);
                     const { encrypted, iv } = await encryptStringAesCbc(JSON.stringify(exportData), key);
-                    const payload = { version: '1.3', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
+                    const payload = { version: '1.4', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
 
                     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -3654,7 +4469,7 @@
                     const salt = crypto.getRandomValues(new Uint8Array(16));
                     const key = await deriveAesKeyFromString(pass1, salt);
                     const { encrypted, iv } = await encryptStringAesCbc(JSON.stringify(data), key);
-                    const payload = { version: '1.3', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
+                    const payload = { version: '1.4', scheme: 'export-v1-aes-cbc', salt: toHex(salt), iv, encrypted };
 
                     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
                     const url = URL.createObjectURL(blob);
@@ -3677,8 +4492,10 @@
                 await this.ensureMode();
                 if (this.localMode) {
                     try {
-                        if (!data.passwords || !Array.isArray(data.passwords)) {
-                            throw new Error('Ungültiges Dateiformat: passwords-Array fehlt');
+                        // Unterstütze sowohl das neue 'entries' als auch das alte 'passwords' Format
+                        const entries = data.entries || data.passwords;
+                        if (!entries || !Array.isArray(entries)) {
+                            throw new Error('Ungültiges Dateiformat: entries/passwords-Array fehlt');
                         }
                         
                         const vault = await LocalMode.loadVault(this.dataKeyHex);
@@ -3704,19 +4521,38 @@
                             });
                         }
                         
-                        // Import passwords
-                        const importedPasswords = data.passwords.map(p => ({
-                            ...p,
-                            id: p.id || crypto.randomUUID(),
-                            createdAt: p.createdAt || new Date().toISOString(),
+                        // Import alle Einträge (passwords, websites, links, notes)
+                        const importedEntries = entries.map(entry => ({
+                            ...entry,
+                            id: entry.id || crypto.randomUUID(),
+                            type: entry.type || 'password', // Standard-Typ für Rückwärtskompatibilität
+                            createdAt: entry.createdAt || new Date().toISOString(),
                             updatedAt: new Date().toISOString()
                         }));
                         
-                        vault.passwords = [...vault.passwords, ...importedPasswords];
+                        vault.passwords = [...vault.passwords, ...importedEntries];
                         
                         await LocalMode.saveVault(this.dataKeyHex, vault);
                         await Promise.all([this.loadFolders(), this.loadPasswords()]);
-                        this.showNotification(`${importedPasswords.length} Passwörter erfolgreich importiert!`, 'success');
+                        
+                        // Zähle verschiedene Eintragstypen für bessere Nachricht
+                        const typeCounts = importedEntries.reduce((acc, entry) => {
+                            acc[entry.type] = (acc[entry.type] || 0) + 1;
+                            return acc;
+                        }, {});
+                        
+                        const typeNames = {
+                            'password': 'Passwörter',
+                            'website': 'Webseiten',
+                            'link': 'Links',
+                            'note': 'Notizen'
+                        };
+                        
+                        const countMessages = Object.entries(typeCounts).map(([type, count]) => 
+                            `${count} ${typeNames[type] || type}`
+                        ).join(', ');
+                        
+                        this.showNotification(`${importedEntries.length} Einträge erfolgreich importiert: ${countMessages}`, 'success');
                     } catch (error) {
                         this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
                     }
@@ -3732,7 +4568,8 @@
                         },
                         credentials: 'include',
                         body: JSON.stringify({ 
-                            passwords: data.passwords,
+                            entries: entries,
+                            passwords: entries, // Für Rückwärtskompatibilität 
                             folders: data.folders || []
                         })
                     });
@@ -3743,13 +4580,13 @@
                     }
 
                     // Wait a moment for the server to process the import
-                    this.showNotification(`Import erfolgreich! Lade ${data.passwords.length} Passwörter...`, 'info');
+                    this.showNotification(`Import erfolgreich! Lade ${entries.length} Einträge...`, 'info');
                     
                     // Add delay before reloading to ensure server has processed the import
                     setTimeout(async () => {
                         try {
                             await Promise.all([this.loadFolders(), this.loadPasswords()]);
-                            this.showNotification(`${data.passwords.length} Passwörter erfolgreich importiert und geladen!`, 'success');
+                            this.showNotification(`${entries.length} Einträge erfolgreich importiert und geladen!`, 'success');
                         } catch (reloadError) {
                             console.error('Error reloading after import:', reloadError);
                             this.showNotification('Import erfolgreich, aber Fehler beim Laden der Passwörter. Bitte laden Sie die Seite neu.', 'warning');
@@ -3774,7 +4611,9 @@
                             const json = await decryptStringAesCbc(data.encrypted, data.iv, key);
                             data = JSON.parse(json || '{}');
                         }
-                        if (!data.passwords || !Array.isArray(data.passwords)) throw new Error('Ungültiges Dateiformat');
+                        // Unterstütze sowohl das neue 'entries' als auch das alte 'passwords' Format
+                        const entries = data.entries || data.passwords;
+                        if (!entries || !Array.isArray(entries)) throw new Error('Ungültiges Dateiformat');
                         
                         const vault = await LocalMode.loadVault(this.dataKeyHex);
                         
@@ -3804,11 +4643,12 @@
                         }
                         // For older exports without folders, we'll keep existing folders
                         
-                        // Import passwords
-                        vault.passwords = data.passwords.map(p => ({
-                            ...p,
-                            id: p.id || crypto.randomUUID(),
-                            createdAt: p.createdAt || new Date().toISOString(),
+                        // Import alle Einträge (passwords, websites, links, notes)
+                        vault.passwords = entries.map(entry => ({
+                            ...entry,
+                            id: entry.id || crypto.randomUUID(),
+                            type: entry.type || 'password', // Standard-Typ für Rückwärtskompatibilität
+                            createdAt: entry.createdAt || new Date().toISOString(),
                             updatedAt: new Date().toISOString()
                         }));
                         
@@ -3842,7 +4682,9 @@
                         data = JSON.parse(json || '{}');
                     }
                     
-                    if (!data.passwords || !Array.isArray(data.passwords)) {
+                    // Unterstütze sowohl das neue 'entries' als auch das alte 'passwords' Format
+                    const entries = data.entries || data.passwords;
+                    if (!entries || !Array.isArray(entries)) {
                         throw new Error('Ungültiges Dateiformat');
                     }
 
@@ -3853,7 +4695,8 @@
                         },
                         credentials: 'include',
                         body: JSON.stringify({ 
-                            passwords: data.passwords,
+                            entries: entries,
+                            passwords: entries, // Für Rückwärtskompatibilität
                             folders: data.folders || []
                         })
                     });
@@ -3865,7 +4708,25 @@
 
                     // Reload both folders and passwords after import
                     await Promise.all([this.loadFolders(), this.loadPasswords()]);
-                    this.showNotification('Daten erfolgreich importiert!', 'success');
+                                            // Zähle verschiedene Eintragstypen für bessere Nachricht
+                        const typeCounts = entries.reduce((acc, entry) => {
+                            const type = entry.type || 'password';
+                            acc[type] = (acc[type] || 0) + 1;
+                            return acc;
+                        }, {});
+                        
+                        const typeNames = {
+                            'password': 'Passwörter',
+                            'website': 'Webseiten',
+                            'link': 'Links',
+                            'note': 'Notizen'
+                        };
+                        
+                        const countMessages = Object.entries(typeCounts).map(([type, count]) => 
+                            `${count} ${typeNames[type] || type}`
+                        ).join(', ');
+                        
+                        this.showNotification(`${entries.length} Einträge erfolgreich importiert: ${countMessages}`, 'success');
                 } catch (error) {
                     this.showNotification('Fehler beim Importieren: ' + error.message, 'error');
                 }
@@ -4145,29 +5006,36 @@
                     
                     for (const folder of this.folders) {
                         const folderDiv = document.createElement('div');
-                        folderDiv.style.cssText = 'display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid #f3f4f6;';
+                        folderDiv.className = 'folder-item';
+                        folderDiv.style.cssText = 'padding:16px 0; border-bottom:1px solid #f3f4f6;';
                         
                         const input = document.createElement('input');
                         input.type = 'text';
                         input.value = folder.name;
                         input.setAttribute('data-folder-id', folder.id);
-                        input.style.cssText = 'flex:1; padding:10px; border:1px solid #d1d5db; border-radius:8px;';
+                        input.style.cssText = 'width:100%; padding:10px; border:1px solid #d1d5db; border-radius:8px; margin-bottom:12px; box-sizing:border-box;';
+                        
+                        const buttonGroup = document.createElement('div');
+                        buttonGroup.className = 'folder-button-group';
+                        buttonGroup.style.cssText = 'display:flex; gap:8px;';
                         
                         const renameBtn = document.createElement('button');
                         renameBtn.className = 'btn btn-secondary';
-                        renameBtn.style.width = 'auto';
+                        renameBtn.style.cssText = 'flex:1; font-size:14px;';
                         renameBtn.textContent = 'Umbenennen';
                         renameBtn.onclick = () => this.renameFolder(folder.id);
                         
                         const deleteBtn = document.createElement('button');
                         deleteBtn.className = 'btn btn-danger';
-                        deleteBtn.style.width = 'auto';
+                        deleteBtn.style.cssText = 'flex:1; font-size:14px;';
                         deleteBtn.textContent = 'Löschen';
                         deleteBtn.onclick = () => this.deleteFolder(folder.id);
                         
+                        buttonGroup.appendChild(renameBtn);
+                        buttonGroup.appendChild(deleteBtn);
+                        
                         folderDiv.appendChild(input);
-                        folderDiv.appendChild(renameBtn);
-                        folderDiv.appendChild(deleteBtn);
+                        folderDiv.appendChild(buttonGroup);
                         fragment.appendChild(folderDiv);
                     }
                     
@@ -4205,6 +5073,9 @@
             }
         }
 
+        // App version - update this when changing package.json version
+        const APP_VERSION = '1.9.0';
+        
         // Global variables
         let passwordManager;
         let currentEditingId = null;
@@ -4252,7 +5123,7 @@
                         try {
                         await passwordManager.verifyMasterPassword(masterPassword);
                         // mini delay -> file-store writes are fs-based
-                        await new Promise(r => setTimeout(r, 600000000000)); // Increased delay for session creation
+                        await new Promise(r => setTimeout(r, 100)); // Small delay for session creation
                         passwordManager.cachedMasterPassword = masterPassword;
                         } catch (e) {
                             const needsLink = (e.details && e.details.code === 'LINK_REQUIRED') || /Linking required/i.test(e.message || '');
@@ -4286,9 +5157,15 @@
                 await Promise.all([passwordManager.loadFolders(), passwordManager.loadPasswords()]);
                 console.log('Passwords loaded successfully');
                 
+                // Initialize activity tracking for session extension
+                passwordManager.initActivityTracking();
+                
+                // Start session timer
+                passwordManager.startSessionTimer();
+                
                 document.getElementById('initialLoading').style.display = 'none';
                 document.getElementById('mainContent').style.display = 'block';
-                document.getElementById('headerActions').style.display = 'block';
+                document.getElementById('topActions').style.display = 'flex';
                 
                 // Clear form
                 document.getElementById('masterPassword').value = '';
@@ -4325,7 +5202,7 @@
                 passwordManager = null;
                 document.getElementById('loginScreen').style.display = 'block';
                 document.getElementById('mainContent').style.display = 'none';
-                document.getElementById('headerActions').style.display = 'none';
+                document.getElementById('topActions').style.display = 'none';
                 document.getElementById('passwordsContainer').innerHTML = `
                     <div class="loading">
                         <div class="spinner"></div>
@@ -4709,20 +5586,126 @@
         }
 
         // Initialize the app
+        // Helper function to get cached password directly from storage
+        const getCachedPasswordDirect = () => {
+            try {
+                // Try sessionStorage first
+                let cached = sessionStorage.getItem('pwa_cached_mp');
+                let timestamp = sessionStorage.getItem('pwa_session_timestamp');
+                
+                // If not found in sessionStorage, try localStorage backup
+                if (!cached || !timestamp) {
+                    cached = localStorage.getItem('pwa_cached_mp_backup');
+                    timestamp = localStorage.getItem('pwa_session_timestamp_backup');
+                }
+                
+                if (!cached || !timestamp) return null;
+                
+                // Check if cache is not older than 1 minute (for testing)
+                const age = Date.now() - parseInt(timestamp);
+                const maxAge = 1 * 60 * 1000; // 1 minute
+                
+                if (age > maxAge) {
+                    return null;
+                }
+                
+                return atob(cached);
+            } catch (error) {
+                console.warn('Could not retrieve cached password directly:', error);
+                return null;
+            }
+        };
+
         document.addEventListener('DOMContentLoaded', async () => {
             try {
+                // Test sessionStorage functionality first
+                try {
+                    sessionStorage.setItem('test_key', 'test_value');
+                    const testValue = sessionStorage.getItem('test_key');
+                    sessionStorage.removeItem('test_key');
+                    console.log('🧪 SessionStorage test:', testValue === 'test_value' ? 'PASSED' : 'FAILED');
+                } catch (error) {
+                    console.error('❌ SessionStorage not available:', error);
+                }
+                
+                // Check for cached password BEFORE creating PasswordManager
+                const cachedPassword = getCachedPasswordDirect();
+                console.log('🔑 Pre-check cached password:', !!cachedPassword);
+                
+                // Debug info removed - no longer needed
+                
+                if (cachedPassword) {
+                    console.log('🔄 Found cached password, attempting automatic re-login...');
+                    try {
+                        // Show loading state
+                        document.getElementById('loginScreen').style.display = 'none';
+                        document.getElementById('initialLoading').style.display = 'flex';
+                        document.querySelector('#initialLoading .loading-content p').textContent = 'Automatische Anmeldung...';
+                        
+                        // Create password manager and try auto-login
+                        const tempManager = new PasswordManager();
+                        await tempManager.verifyMasterPassword(cachedPassword);
+                        
+                        // Success! Set as main password manager and show main content
+                        passwordManager = tempManager;
+                        passwordManager.isAuthenticated = true;
+                        passwordManager.cachedMasterPassword = cachedPassword;
+                        
+                        // Initialize activity tracking (only in server mode)
+                        passwordManager.initActivityTracking();
+                        
+                        // Load data and show main content
+                        await Promise.all([passwordManager.loadFolders(), passwordManager.loadPasswords()]);
+                        document.getElementById('initialLoading').style.display = 'none';
+                        document.getElementById('mainContent').style.display = 'block';
+                        document.getElementById('topActions').style.display = 'flex';
+                        
+                        // Start session timer after successful auto-login
+                        passwordManager.startSessionTimer();
+                        
+                        console.log('✅ Automatic re-login successful');
+                        return;
+                    } catch (error) {
+                        console.warn('❌ Automatic re-login failed:', error.message);
+                        
+                        // Clear invalid cached password
+                        try {
+                            sessionStorage.removeItem('pwa_cached_mp');
+                            sessionStorage.removeItem('pwa_session_timestamp');
+                            localStorage.removeItem('pwa_cached_mp_backup');
+                            localStorage.removeItem('pwa_session_timestamp_backup');
+                        } catch (e) {
+                            console.warn('Could not clear cached password:', e);
+                        }
+                        
+                        // Fall back to normal login
+                        document.getElementById('initialLoading').style.display = 'none';
+                        document.getElementById('loginScreen').style.display = 'block';
+                    }
+                }
+                
+                // No cached password or auto-login failed - continue with normal session check
                 const tempManager = new PasswordManager();
                 
-                // Check if user is already authenticated
-                const isAuthenticated = await tempManager.checkSessionStatus();
+                console.log('🔍 Checking session status on app load...');
+                let isAuthenticated = await tempManager.checkSessionStatus();
+                console.log('📋 Session status check result:', isAuthenticated);
+                
                 if (isAuthenticated) {
                     // User is already logged in, show main content
                     passwordManager = tempManager;
                     passwordManager.isAuthenticated = true;
+                    
+                    // Initialize activity tracking for session extension
+                    passwordManager.initActivityTracking();
+                    
+                    // Start session timer
+                    passwordManager.startSessionTimer();
+                    
                     await Promise.all([passwordManager.loadFolders(), passwordManager.loadPasswords()]);
                     document.getElementById('initialLoading').style.display = 'none';
                     document.getElementById('mainContent').style.display = 'block';
-                    document.getElementById('headerActions').style.display = 'block';
+                    document.getElementById('topActions').style.display = 'flex';
                     return;
                 }
                 
