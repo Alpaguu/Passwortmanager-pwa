@@ -66,6 +66,7 @@
             gap: 2px;
             z-index: 1000;
             -webkit-app-region: no-drag;
+            align-items: center;
         }
 
         .btn-fresh {
@@ -79,6 +80,9 @@
             cursor: pointer;
             transition: all 0.15s ease;
             width: auto !important;
+            height: 36px;
+            display: flex;
+            align-items: center;
         }
 
         .btn-fresh:hover {
@@ -100,6 +104,80 @@
 
         .btn-fresh.btn-logout:hover {
             background: #b91c1c !important;
+        }
+
+        /* Session Timer Styles - Elegant & Minimal */
+        .session-timer {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+            min-width: 140px;
+            font-size: 13px;
+            color: #64748b;
+            font-weight: 500;
+            height: 36px;
+            display: flex;
+            align-items: center;
+        }
+
+        .session-timer:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+
+        .session-timer-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .session-timer-icon {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .session-timer-text {
+            color: inherit;
+            font-size: inherit;
+            font-weight: inherit;
+        }
+
+        /* Warning state when time is running low */
+        .session-timer.warning {
+            background: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .session-timer.warning:hover {
+            background: #fde68a;
+            border-color: #d97706;
+        }
+
+        /* Critical state for last few seconds */
+        .session-timer.critical {
+            background: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+            animation: gentle-pulse 1.5s ease-in-out infinite alternate;
+        }
+
+        .session-timer.critical:hover {
+            background: #fecaca;
+            border-color: #dc2626;
+        }
+
+        @keyframes gentle-pulse {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0.8;
+            }
         }
 
         .header h1 {
@@ -1519,8 +1597,11 @@
         <button class="btn btn-fresh btn-secondary" id="manageFoldersBtn">Ordner verwalten</button>
         <button class="btn btn-fresh btn-logout" onclick="logout()">Logout</button>
         <!-- Session Timer Display -->
-        <div id="sessionTimer" style="margin-top: 5px; text-align: right; color: #666; font-size: 12px; display: none;">
-            🕐 Session: <span id="sessionTimeLeft">1:00</span>
+        <div id="sessionTimer" class="session-timer" style="display: none;">
+            <div class="session-timer-content">
+                <span class="session-timer-icon">⏱️</span>
+                <span class="session-timer-text">Session: <span id="sessionTimeLeft">1:00</span></span>
+            </div>
         </div>
     </div>
     
@@ -2613,9 +2694,10 @@
             }
 
             showSessionIndicator() {
-                // Show the simple timer display under logout button
+                // Show the elegant timer display under logout button
                 const sessionTimer = document.getElementById('sessionTimer');
                 const sessionTimeLeft = document.getElementById('sessionTimeLeft');
+                
                 if (sessionTimer && sessionTimeLeft) {
                     sessionTimer.style.display = 'block';
                     this.updateSessionDisplay();
@@ -2624,8 +2706,9 @@
             
             updateSessionDisplay() {
                 const sessionTimeLeft = document.getElementById('sessionTimeLeft');
+                const sessionTimer = document.getElementById('sessionTimer');
                 
-                if (!sessionTimeLeft) return;
+                if (!sessionTimeLeft || !sessionTimer) return;
                 
                 // If timeRemaining is not set, show default
                 if (!this.timeRemaining || this.timeRemaining <= 0) {
@@ -2639,14 +2722,13 @@
                 
                 sessionTimeLeft.textContent = timeText;
                 
-                // Change color when time is running low
-                const sessionTimer = document.getElementById('sessionTimer');
-                if (sessionTimer) {
-                    if (this.timeRemaining <= 30000) { // Last 30 seconds
-                        sessionTimer.style.color = '#dc3545'; // Red
-                    } else {
-                        sessionTimer.style.color = '#666'; // Normal gray
-                    }
+                // Update visual states based on remaining time
+                sessionTimer.classList.remove('warning', 'critical');
+                
+                if (this.timeRemaining <= 10000) { // Last 10 seconds - critical
+                    sessionTimer.classList.add('critical');
+                } else if (this.timeRemaining <= 30000) { // Last 30 seconds - warning
+                    sessionTimer.classList.add('warning');
                 }
                 
                 console.log(`Timer updated: ${timeText} (${this.timeRemaining}ms remaining)`);
@@ -3250,8 +3332,19 @@
             _clearCaches() {
                 try {
                     this._folderOptionsCache = null;
-                    this._folderChipsCache = null;
+                    
+                    // Clear folder chips cache completely
+                    if (this._folderChipsCache) {
+                        this._folderChipsCache.clear();
+                        this._folderChipsCache = null;
+                    }
+                    
                     this._collator = null;
+                    
+                    // Force garbage collection hint for better memory management
+                    if (window.gc) {
+                        window.gc();
+                    }
                 } catch (error) {
                     console.error('Error clearing caches:', error);
                 }
@@ -3435,7 +3528,29 @@
                     // IMPORTANT: Reload data to ensure consistency
                     try {
                         await Promise.all([this.loadFolders(), this.loadPasswords()]);
-                        console.log('✅ Data reloaded after folder rename');
+                        
+                        // Force UI update after data reload to ensure folder names are updated everywhere
+                        this._clearCaches();
+                        requestAnimationFrame(() => {
+                            this.renderFoldersList();
+                            this.renderPasswords();
+                            this.hydrateFolderSelects();
+                            
+                                                // Force additional renders to ensure all changes are visible
+                    setTimeout(() => {
+                        this.renderPasswords();
+                        setTimeout(() => {
+                            this.renderPasswords();
+                            
+                            // Final render to ensure all folder chips are updated
+                            setTimeout(() => {
+                                this.renderPasswords();
+                            }, 200);
+                        }, 100);
+                    }, 50);
+                        });
+                        
+                        console.log('✅ Data reloaded and UI updated after folder rename');
                     } catch (reloadError) {
                         console.warn('Error reloading data after folder rename:', reloadError);
                     }
@@ -3959,6 +4074,17 @@
                     
                     // Adjust textarea heights for notes
                     this.adjustNotesTextareaHeights();
+                    
+                    // Force folder chips to be rebuilt for next render
+                    if (this._folderChipsCache) {
+                        this._folderChipsCache.clear();
+                        this._folderChipsCache = null;
+                    }
+                    
+                    // Force folder options to be rebuilt for next render
+                    if (this._folderOptionsCache) {
+                        this._folderOptionsCache = null;
+                    }
                     
                     console.log('✅ renderPasswords completed successfully');
                 } catch (error) {
@@ -4810,8 +4936,32 @@
                     vault.folders[idx].updatedAt = new Date().toISOString();
                     await LocalMode.saveVault(this.dataKeyHex, vault);
                     this.folders = vault.folders;
-                    this.renderFoldersList();
-                    this.renderPasswords();
+                    
+                    // Clear caches and update UI completely
+                    this._clearCaches();
+                    
+                    // Force immediate update of all password displays to show new folder names
+                    requestAnimationFrame(() => {
+                        this.renderFoldersList();
+                        this.renderPasswords();
+                        this.hydrateFolderSelects();
+                        
+                                            // Force a second render to ensure all folder chips are updated
+                    setTimeout(() => {
+                        this.renderPasswords();
+                        
+                                                    // Force a third render to ensure all changes are visible
+                            setTimeout(() => {
+                                this.renderPasswords();
+                                
+                                // Final render to ensure all folder chips are updated
+                                setTimeout(() => {
+                                    this.renderPasswords();
+                                }, 200);
+                            }, 100);
+                    }, 50);
+                    });
+                    
                     this.showNotification('Ordner umbenannt', 'success');
                     return;
                 }
@@ -4832,9 +4982,27 @@
                     
                     // Clear caches and update UI smoothly
                     this._clearCaches();
+                    
+                    // Force immediate update of all password displays to show new folder names
                     requestAnimationFrame(() => {
-                        this.hydrateFolderSelects();
+                        this.renderFoldersList();
                         this.renderPasswords();
+                        this.hydrateFolderSelects();
+                        
+                        // Force a second render to ensure all folder chips are updated
+                        setTimeout(() => {
+                            this.renderPasswords();
+                            
+                            // Force a third render to ensure all changes are visible
+                            setTimeout(() => {
+                                this.renderPasswords();
+                                
+                                // Final render to ensure all folder chips are updated
+                                setTimeout(() => {
+                                    this.renderPasswords();
+                                }, 200);
+                            }, 100);
+                        }, 50);
                     });
                     
                     // Show success message immediately
@@ -4947,7 +5115,10 @@
                         this._folderChipsCache = new Map();
                     }
                     
-                    const cacheKey = `${passwordId}_${passwordFolderId}_${this.folders.length}`;
+                    // Create a more robust cache key that includes folder names and IDs
+                    const folderSignature = this.folders.map(f => `${f.id}:${f.name}`).join('|');
+                    const cacheKey = `${passwordId}_${passwordFolderId}_${folderSignature}`;
+                    
                     if (this._folderChipsCache.has(cacheKey)) {
                         return this._folderChipsCache.get(cacheKey);
                     }
